@@ -1,0 +1,14 @@
+version = 1
+
+[[annotations]]
+path = [
+    "source.c",
+    ".gitignore",
+    ".clang-format",
+    ".clang-tidy",
+    ".pre-commit-config.yaml",
+    ".clangd",
+    "CMakePresets.json"
+]
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "CC0-1.0"

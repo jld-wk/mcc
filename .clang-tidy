@@ -1,0 +1,244 @@
+Checks: >
+  bugprone-*,
+  performance-*,
+  modernize-use-override,
+  modernize-use-nullptr,
+  modernize-use-emplace,
+  modernize-use-equals-default,
+  modernize-use-equals-delete,
+  modernize-make-unique,
+  modernize-make-shared,
+  modernize-use-using,
+  modernize-use-default-member-init,
+  modernize-use-noexcept,
+  modernize-use-std-bit,
+  modernize-use-to-underlying,
+  modernize-use-auto,
+  modernize-use-nodiscard,
+  modernize-use-trailing-return-type,
+  modernize-use-ranges,
+  modernize-use-structured-binding,
+  modernize-use-designated-initializers,
+  modernize-use-std-format,
+  modernize-use-std-print,
+  readability-identifier-naming,
+  readability-container-size-empty,
+  readability-delete-null-pointer,
+  readability-duplicate-include,
+  readability-else-after-return,
+  readability-make-member-function-const,
+  readability-redundant-control-flow,
+  readability-redundant-smartptr-get,
+  readability-redundant-string-cstr,
+  readability-simplify-boolean-expr,
+  readability-static-accessed-through-instance,
+  readability-use-std-min-max,
+  readability-const-return-type,
+  readability-qualified-auto,
+  readability-use-anyofallof,
+  misc-unused-parameters,
+  misc-unused-using-decls,
+  clang-analyzer-core.*,
+  clang-analyzer-cplusplus.*,
+  cppcoreguidelines-use-enum-class,
+  cppcoreguidelines-init-variables,
+  cppcoreguidelines-pro-type-member-init,
+  cppcoreguidelines-pro-type-cstyle-cast,
+  google-explicit-constructor,
+  google-build-using-namespace,
+  google-runtime-float,
+  google-readability-todo,
+  google-readability-casting,
+  google-readability-namespace-comments
+
+WarningsAsErrors: "*"
+
+HeaderFilterRegex: "src/.*"
+
+CheckOptions:
+  - key: bugprone-easily-swappable-parameters.MinimumLength
+    value: 4
+
+  - key: bugprone-easily-swappable-parameters.SuppressParametersUsedTogether
+    value: false
+
+  - key: bugprone-easily-swappable-parameters.NamePrefixSuffixSilenceDissimilarityThreshold
+    value: 0
+
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.TypedefCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.EnumConstantPrefix
+    value: ""
+
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+
+  - key: readability-identifier-naming.MethodCase
+    value: lower_case
+
+  - key: readability-identifier-naming.IgnoreMainLikeFunctions
+    value: "1"
+
+  # Static class member:
+  # static int s_frameCount_;
+
+  - key: readability-identifier-naming.ClassMemberCase
+    value: camelBack
+
+  - key: readability-identifier-naming.ClassMemberPrefix
+    value: s_
+
+  - key: readability-identifier-naming.ClassMemberSuffix
+    value: _
+
+  # Public struct data:
+  # struct Window { int width; };
+
+  - key: readability-identifier-naming.PublicMemberCase
+    value: camelBack
+
+  - key: readability-identifier-naming.PublicMemberPrefix
+    value: ""
+
+  - key: readability-identifier-naming.PublicMemberSuffix
+    value: ""
+
+  # Private:
+  # int m_frameCount_;
+
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: camelBack
+
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: m_
+
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: "_"
+
+  # Protected:
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: camelBack
+
+  - key: readability-identifier-naming.ProtectedMemberPrefix
+    value: m_
+
+  - key: readability-identifier-naming.ProtectedMemberSuffix
+    value: "_"
+
+  # static Renderer s_renderer;
+
+  - key: readability-identifier-naming.StaticVariableCase
+    value: camelBack
+
+  - key: readability-identifier-naming.StaticVariablePrefix
+    value: s_
+
+  # Renderer* g_renderer;
+
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: camelBack
+
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: g_
+
+  - key: readability-identifier-naming.GlobalVariableIgnoredRegexp
+    value: "TAG|IRAM_ATTR"
+
+  # constexpr int c_maxFrames = 60;
+
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: camelBack
+
+  - key: readability-identifier-naming.GlobalConstantPrefix
+    value: c_
+
+  - key: readability-identifier-naming.StaticConstantCase
+    value: camelBack
+
+  - key: readability-identifier-naming.StaticConstantPrefix
+    value: c_
+
+  - key: readability-identifier-naming.ClassConstantCase
+    value: camelBack
+
+  - key: readability-identifier-naming.ClassConstantPrefix
+    value: c_
+
+  - key: readability-identifier-naming.ClassConstantSuffix
+    value: _
+
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+
+  - key: readability-identifier-naming.LocalVariableCase
+    value: lower_case
+
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+
+  # Local constants:
+  # const int frame_limit = 60;
+
+  - key: readability-identifier-naming.LocalConstantCase
+    value: lower_case
+
+  - key: readability-identifier-naming.LocalConstantPrefix
+    value: ""
+
+  - key: readability-identifier-naming.LocalConstexprVariableCase
+    value: lower_case
+
+  - key: readability-identifier-naming.LocalConstexprVariablePrefix
+    value: ""
+
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+
+  - key: readability-identifier-naming.MacroDefinitionPrefix
+    value: JLD_MCC_
+
+  - key: readability-identifier-naming.MacroDefinitionIgnoredRegexp
+    value: "^[A-Z]+(_[A-Z]+)*_$"
+
+  - key: google-build-using-namespace.ShortNamespaceLines
+    value: "1"
+
+  - key: google-runtime-int.IncludeStyle
+    value: "uint16"
+
+  - key: google-explicit-constructor.StrictMode
+    value: "false"
+
+  - key: modernize-use-override.IgnoreDestructors
+    value: "true"
+
+  - key: modernize-use-nullptr.NullMacros
+    value: "NULL"
+
+  - key: performance-for-range-copy.AllowedTypes
+    value: "std::initializer_list"
+
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: "std::unique_ptr"
+
+  - key: readability-function-cognitive-complexity.IgnoreMacros
+    value: true

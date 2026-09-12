@@ -1,0 +1,24 @@
+CompileFlags:
+  CompilationDatabase: build
+
+Style:
+  QuotedHeaders: "src/.*"
+  AngledHeaders: ["vendor/.*"]
+
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+
+Completion:
+  AllScopes: Yes
+  ArgumentLists: FullPlaceholders
+  HeaderInsertion: IWYU
+  CodePatterns: All
+---
+
+If:
+  PathMatch: vendor/.*
+Diagnostics:
+  Suppress: "*"
+  UnusedIncludes: None
+  MissingIncludes: None

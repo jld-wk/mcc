@@ -1,0 +1,15 @@
+fail_fast: false
+repos:
+  - repo: https://github.com/fsfe/reuse-tool
+    rev: v6.2.0
+    hooks:
+      - id: reuse
+  - repo: https://github.com/pocc/pre-commit-hooks
+    rev: v1.3.5
+    hooks:
+      - id: clang-format
+        args: [-i, --style=file]
+        exclude: (^vendor/|source.c)
+      - id: clang-tidy
+        args: [-p=build]
+        exclude: (^vendor/|source.c)
