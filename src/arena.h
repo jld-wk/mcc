@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: (c) 2026 Julian Duwe
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef JLD_MCC_ARENAS
-#define JLD_MCC_ARENAS
+#ifndef JLD_MCC_ARENA
+#define JLD_MCC_ARENA
 
 #include <cassert>
 #include <cstddef>
@@ -77,4 +77,4 @@ class Arena {
   size_t     m_blockIdx_{ 0 };
 };
 
-#endif
+#endif  // JLD_MCC_ARENA

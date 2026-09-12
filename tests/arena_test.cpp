@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: (c) 2026 Julian Duwe
 // SPDX-License-Identifier: Apache-2.0
 
+#include "arena.h"
+
 #include <cassert>
 #include <cstddef>
-
-#include "arenas.h"
 
 class C {
  public:

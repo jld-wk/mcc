@@ -10,30 +10,8 @@
 #include <string_view>
 #include <vector>
 
-#include "arenas.h"
+#include "syntaxer.h"
 #include "tokenize.h"
-
-class C {
- public:
-  C()
-      : m_a_(0)
-      , m_b_(0) {}
-  C(int a, int b)
-      : m_a_(a)
-      , m_b_(b) {}
-
-  [[nodiscard]] auto a() const -> int {
-    return m_a_;
-  }
-
-  [[nodiscard]] auto b() const -> int {
-    return m_b_;
-  }
-
- private:
-  int m_a_;
-  int m_b_;
-};
 
 auto main() -> int {
   try {
@@ -59,8 +37,8 @@ auto main() -> int {
                    token.text, token.source.startLine, token.source.endLine,
                    token.source.startColumn, token.source.endColumn);
 
-    Arena<C> c;
-    c.emplace(10, 10);
+    Syntaxer syntaxer{ tokens };
+    syntaxer.build();
   } catch (const std::exception& e) {
     return 1;
   }

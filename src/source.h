@@ -20,4 +20,4 @@ struct SourceRange {
   uint32_t endColumn;
 };
 
-#endif
+#endif  // JLD_MCC_SOURCE

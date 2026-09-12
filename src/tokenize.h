@@ -557,7 +557,7 @@ class Tokenizer {
   std::string_view                 m_source_;
   std::string_view::const_iterator m_sourceIt_{ nullptr };
 
-  // TODO(jld-wk): use a token arena
+  // TODO(jld-wk): use a token arena -> mhmm probably have to change the arena implementation then
   std::vector<Token> m_tokens_;
 };
 
@@ -784,4 +784,4 @@ auto format_token_kind(TokenKind kind) -> const char* {
   return "<unknown>";
 }
 
-#endif
+#endif  // JLD_MCC_TOKENIZE
