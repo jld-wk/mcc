@@ -4,6 +4,7 @@
 #ifndef JLD_MCC_SEMANTIC_PASS_H
 #define JLD_MCC_SEMANTIC_PASS_H
 
+#include <cassert>
 #include <print>
 #include <variant>
 #include <vector>
@@ -11,23 +12,54 @@
 #include "decls.h"
 #include "exprs.h"
 #include "stmts.h"
+#include "type_arena.h"
+#include "types.h"
 #include "utility.h"
+
+/*
+
+TODOs:
+* Name resolution
+* Scopes
+* Type resolution (typedef etc.)
+* Type checking (advanced)
+
+int main() {
+  return 42;
+}
+
+For the current project, main should turn into a function symbol, which then replaces the function
+declaration (so might be an syntaxer step already). Then the entry scope of main is entered and
+therfore the current function symbol is main. Return should just query the latest entered function
+and compare the function and expression type.
+
+*/
 
 template <bool Debug>
 class SemanticPass {
  public:
+  explicit SemanticPass(TypeArena& types)
+      : m_types_{ types } {}
+
   void analyze(std::vector<Decl*>& ast) {
     for (Decl* decl : ast) analyze_decl(decl);
   }
 
  private:
-  void analyze_expr(Expr* expr) {
+  auto compare_types(Type* type_a, Type* type_b) -> bool {
+    assert(type_a != nullptr && type_b != nullptr);
+    return type_a->variant == type_b->variant;
+  }
+
+  void analyze_expr(Expr* p_expr) {
     std::visit(Overload{ [&](const IntLiteralExpr& expr) -> void {
                  if constexpr (Debug) {
                    std::println("Analyzing Integer Literal Expression -> {}", expr.literal);
                  }
+
+                 p_expr->type = m_types_.query(BuiltinType{ .kind = BuiltinTypeKind::Int });
                } },
-               expr->variant);
+               p_expr->variant);
   }
 
   void analyze_stmt(Stmt* stmt) {
@@ -49,6 +81,9 @@ class SemanticPass {
                            }
 
                            analyze_expr(stmt.expr);
+                           assert(compare_types(
+                               stmt.expr->type,
+                               m_types_.query(BuiltinType{ .kind = BuiltinTypeKind::Int })));
                          } },
                stmt->variant);
   }
@@ -63,6 +98,9 @@ class SemanticPass {
                } },
                decl->variant);
   }
+
+ private:
+  TypeArena& m_types_;
 };
 
 #endif

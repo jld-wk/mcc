@@ -7,21 +7,22 @@
 #include <cstdint>
 #include <variant>
 
-#include "source.h"
-
 enum class BuiltinTypeKind : uint8_t {
   Int,
 };
 
 struct BuiltinType {
   BuiltinTypeKind kind;
+
+  auto operator==(BuiltinType other) const -> bool {
+    return kind == other.kind;
+  }
 };
 
 using TypeVariant = std::variant<BuiltinType>;
 
 struct Type {
   TypeVariant variant;
-  SourceRange source;
 };
 
 #endif  // JLD_MCC_TYPES_H

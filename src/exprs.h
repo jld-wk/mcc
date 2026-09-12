@@ -7,6 +7,7 @@
 #include <variant>
 
 #include "source.h"
+#include "types.h"
 
 struct IntLiteralExpr {
   int literal{ 0 };
@@ -17,6 +18,7 @@ using ExprVariant = std::variant<IntLiteralExpr>;
 struct Expr {
   ExprVariant variant;
   SourceRange source;
+  Type*       type{ nullptr };
 };
 
 #endif  // JLD_MCC_EXPRS_H

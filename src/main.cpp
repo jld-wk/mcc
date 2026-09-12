@@ -15,6 +15,7 @@
 #include "passes/semantic.h"
 #include "syntaxer.h"
 #include "tokenize.h"
+#include "type_arena.h"
 #include "utility.h"
 
 auto main() -> int {
@@ -42,7 +43,9 @@ auto main() -> int {
                    token.source.startColumn, token.source.endColumn);
     std::println("");
 
-    Syntaxer syntaxer{ tokens };
+    TypeArena types;
+
+    Syntaxer syntaxer{ tokens, types };
     // TODO(jld-wk): not actually an AST yet, have to implement a FileDecl
     std::vector<Decl*> ast = syntaxer.build();
 
@@ -59,7 +62,7 @@ auto main() -> int {
     }
     std::println("");
 
-    SemanticPass<true> semantic_pass;
+    SemanticPass<true> semantic_pass{ types };
     semantic_pass.analyze(ast);
 
   } catch (const std::exception& e) {

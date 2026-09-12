@@ -17,13 +17,15 @@
 #include "source.h"
 #include "stmts.h"
 #include "tokenize.h"
+#include "type_arena.h"
 #include "types.h"
 #include "utility.h"
 
 class Syntaxer {
  public:
-  explicit Syntaxer(const std::vector<Token>& tokens)
-      : m_tokens_{ tokens } {}
+  explicit Syntaxer(const std::vector<Token>& tokens, TypeArena& types)
+      : m_types_{ types }
+      , m_tokens_{ tokens } {}
 
   [[nodiscard]] auto build() -> std::vector<Decl*> {
     std::vector<Decl*> decls;
@@ -88,9 +90,9 @@ class Syntaxer {
   }
 
   [[nodiscard]] auto build_type() -> Type* {
-    const Token& cur = current();
+    [[maybe_unused]] const Token& cur = current();
     if (match(TokenKind::KywInt)) {
-      return m_types_.emplace(BuiltinType{ .kind = BuiltinTypeKind::Int }, cur.source);
+      return m_types_.emplace(BuiltinType{ .kind = BuiltinTypeKind::Int });
     }
 
     // TODO(jld-wk): print diagnostic
@@ -168,10 +170,11 @@ class Syntaxer {
   }
 
  private:
-  Arena<Type> m_types_;
   Arena<Expr> m_exprs_;
   Arena<Stmt> m_stmts_;
   Arena<Decl> m_decls_;
+
+  TypeArena& m_types_;
 
   const std::vector<Token>& m_tokens_;
   size_t                    m_curToken_{ 0 };
