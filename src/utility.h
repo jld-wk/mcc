@@ -7,4 +7,9 @@
 // TODO(jld-wk): portability
 #define JLD_MCC_FORCE_INLINE [[gnu::always_inline]]
 
-#endif  // JLD_MCC_UTILITY
+template <class... Ts>
+struct Overload : Ts... {
+  using Ts::operator()...;
+};
+
+#endif  // JLD_MCC_UTILITY_H

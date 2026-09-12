@@ -784,4 +784,4 @@ auto format_token_kind(TokenKind kind) -> const char* {
   return "<unknown>";
 }
 
-#endif  // JLD_MCC_TOKENIZE
+#endif  // JLD_MCC_TOKENIZE_H

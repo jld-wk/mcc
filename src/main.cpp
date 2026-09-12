@@ -8,14 +8,17 @@
 #include <ios>
 #include <print>
 #include <string_view>
+#include <variant>
 #include <vector>
 
+#include "decls.h"
 #include "syntaxer.h"
 #include "tokenize.h"
+#include "utility.h"
 
 auto main() -> int {
   try {
-    std::println("Hello mcc !");
+    std::println("Hello mcc !\n");
 
     std::fstream file{ "source.c" };
     file.seekg(0, std::ios::end);
@@ -37,8 +40,24 @@ auto main() -> int {
                    token.text, token.source.startLine, token.source.endLine,
                    token.source.startColumn, token.source.endColumn);
 
+    std::println("");
+
     Syntaxer syntaxer{ tokens };
-    syntaxer.build();
+    // TODO(jld-wk): not actually an AST yet, have to implement a FileDecl
+    std::vector<Decl*> ast = syntaxer.build();
+
+    // need like an ast pretty printer
+
+    for (Decl* decl : ast) {
+      std::visit(
+          Overload{
+              [](const FunctionDecl& decl) -> void {
+                std::println("Function Decl: {}", decl.identifer);
+              },
+          },
+          decl->variant);
+    }
+
   } catch (const std::exception& e) {
     return 1;
   }

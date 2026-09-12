@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: (c) 2026 Julian Duwe
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef JLD_MCC_ARENA
-#define JLD_MCC_ARENA
+#ifndef JLD_MCC_ARENA_H
+#define JLD_MCC_ARENA_H
 
 #include <cassert>
 #include <cstddef>
@@ -15,8 +15,6 @@ static inline constexpr size_t c_blocksCount = 100;
 
 template <typename SlotType>
 class Arena {
-  static_assert(std::is_trivially_destructible_v<SlotType>);
-
  public:
   Arena() {
     m_blocks_ = allocate<SlotType*>(c_blocksCount);
@@ -59,10 +57,11 @@ class Arena {
   }
 
   template <typename Type>
-  void deallocate(Type ptr) {
+  void deallocate(Type* ptr) {
     char*      c_ptr = reinterpret_cast<char*>(ptr) - sizeof(size_t);
     const auto size = *reinterpret_cast<size_t*>(c_ptr);
     m_freed_ += size;
+    ptr->~Type();
     free(c_ptr);
   }
 
@@ -77,4 +76,4 @@ class Arena {
   size_t     m_blockIdx_{ 0 };
 };
 
-#endif  // JLD_MCC_ARENA
+#endif  // JLD_MCC_ARENA_H

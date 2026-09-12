@@ -13,3 +13,11 @@ repos:
       - id: clang-tidy
         args: [-p=build]
         exclude: (^vendor/|source.c)
+  - repo: local
+    hooks:
+      - id: cmake-tests
+        name: CMake tests
+        entry: bash -c 'cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

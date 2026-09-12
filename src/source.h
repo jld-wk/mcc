@@ -20,4 +20,15 @@ struct SourceRange {
   uint32_t endColumn;
 };
 
-#endif  // JLD_MCC_SOURCE
+auto source_range_from(const SourceRange& start, const SourceRange& end) -> SourceRange {
+  return SourceRange{
+    .start = start.start,
+    .end = end.end,
+    .startLine = start.startLine,
+    .startColumn = start.startColumn,
+    .endLine = end.endLine,
+    .endColumn = end.endColumn,
+  };
+}
+
+#endif  // JLD_MCC_SOURCE_H
