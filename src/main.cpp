@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "decls.h"
+#include "passes/semantic.h"
 #include "syntaxer.h"
 #include "tokenize.h"
 #include "utility.h"
@@ -39,7 +40,6 @@ auto main() -> int {
       std::println("{} {} -> line(s/e): {}/{} | col(s/e): {}/{}", format_token_kind(token.kind),
                    token.text, token.source.startLine, token.source.endLine,
                    token.source.startColumn, token.source.endColumn);
-
     std::println("");
 
     Syntaxer syntaxer{ tokens };
@@ -57,6 +57,10 @@ auto main() -> int {
           },
           decl->variant);
     }
+    std::println("");
+
+    SemanticPass<true> semantic_pass;
+    semantic_pass.analyze(ast);
 
   } catch (const std::exception& e) {
     return 1;

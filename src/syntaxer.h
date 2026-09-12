@@ -59,7 +59,7 @@ class Syntaxer {
       BlockItem item{ .ptr = build_decl(), .kind = BlockItemKind::Declaration };
       if (item.ptr == nullptr) {
         item.ptr = build_stmt();
-        item.kind = BlockItemKind::Statement;
+        item.kind = item.ptr == nullptr ? BlockItemKind::Undefined : BlockItemKind::Statement;
       }
       items.push_back(item);
     }

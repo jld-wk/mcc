@@ -11,11 +11,11 @@
 #include "exprs.h"
 #include "source.h"
 
-enum class BlockItemKind : uint8_t { Statement, Declaration };
+enum class BlockItemKind : uint8_t { Undefined, Statement, Declaration };
 
 struct BlockItem {
-  void*         ptr;
-  BlockItemKind kind;
+  void*         ptr{ nullptr };
+  BlockItemKind kind{ BlockItemKind::Undefined };
 };
 
 struct BlockStmt {
