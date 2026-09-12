@@ -62,7 +62,7 @@ class SemanticPass {
                p_expr->variant);
   }
 
-  void analyze_stmt(Stmt* stmt) {
+  void analyze_stmt(Stmt* p_stmt) {
     std::visit(Overload{ [&](const BlockStmt& stmt) -> void {
                           if constexpr (Debug) {
                             std::println("Analyzing Block Statement");
@@ -85,10 +85,10 @@ class SemanticPass {
                                stmt.expr->type,
                                m_types_.query(BuiltinType{ .kind = BuiltinTypeKind::Int })));
                          } },
-               stmt->variant);
+               p_stmt->variant);
   }
 
-  void analyze_decl(Decl* decl) {
+  void analyze_decl(Decl* p_decl) {
     std::visit(Overload{ [&](const FunctionDecl& decl) -> void {
                  if constexpr (Debug) {
                    std::println("Analyzing Function Declaration -> {}", decl.identifer);
@@ -96,7 +96,7 @@ class SemanticPass {
 
                  analyze_stmt(decl.stmt);
                } },
-               decl->variant);
+               p_decl->variant);
   }
 
  private:

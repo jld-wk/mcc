@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "decls.h"
+#include "ir/interpreter.h"
 #include "passes/semantic.h"
 #include "syntaxer.h"
 #include "tokenize.h"
@@ -64,6 +65,11 @@ auto main() -> int {
 
     SemanticPass<true> semantic_pass{ types };
     semantic_pass.analyze(ast);
+
+    std::println("");
+
+    IrInterpreter interpreter;
+    interpreter.interpret_file("source.ir");
 
   } catch (const std::exception& e) {
     return 1;
