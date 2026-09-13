@@ -11,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-#include "source.h"
+#include "diagnostic/source.h"
 
 enum class IrTokenKind : uint8_t {
   Number,
@@ -28,7 +28,8 @@ enum class IrTokenKind : uint8_t {
   KywMul,
   KywDiv,
 
-  KywRet,
+  KywDup,
+  KywExit,
 
   KywCall,
   KywCallT,
@@ -39,6 +40,13 @@ enum class IrTokenKind : uint8_t {
   KywJmpF,
 
   KywDbgDump,
+
+  KywEq,
+  KywNe,
+  KywLt,
+  KywLe,
+  KywGt,
+  KywGe,
 
   Colon,
   Semicolon,
@@ -55,11 +63,12 @@ struct IrToken {
 
 class IrTokenizer {
  public:
-  auto tokenize(std::string_view stream) -> const std::vector<IrToken>& {
+  auto tokenize(FileId file, std::string_view stream) -> const std::vector<IrToken>& {
+    m_file_ = file;
     m_source_ = stream;
     m_sourceIt_ = stream.begin();
 
-    for (char c = *m_sourceIt_; m_sourceIt_ != stream.end(); c = *m_sourceIt_) {
+    for (char c{ *m_sourceIt_ }; m_sourceIt_ != stream.end(); c = *m_sourceIt_) {
       m_startLine_ = m_line_;
       m_startColumn_ = m_column_;
       m_startIterated_ = m_iterated_;
@@ -88,8 +97,8 @@ class IrTokenizer {
       if (std::isalpha(c)) {
         while (is_identifier(*m_sourceIt_)) iterate();
 
-        std::string_view view = str_view();
-        IrTokenKind      kind = keyword_kind(view);
+        std::string_view view{ str_view() };
+        IrTokenKind      kind{ keyword_kind(view) };
 
         if (kind != IrTokenKind::Unknown)
           push_token_str_view(kind, view);
@@ -137,12 +146,11 @@ class IrTokenizer {
         .kind = kind,
         .source =
             SourceRange{
-                .start = m_startIterated_,
-                .end = m_iterated_,
-                .startLine = m_startLine_,
-                .startColumn = m_startColumn_,
-                .endLine = m_line_,
-                .endColumn = m_column_,
+                .file = m_file_,
+                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
+                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
+                .beginIt = m_startIterated_,
+                .endIt = m_iterated_,
             },
         .text = str_view(),
     });
@@ -153,12 +161,11 @@ class IrTokenizer {
         .kind = kind,
         .source =
             SourceRange{
-                .start = m_startIterated_,
-                .end = m_iterated_,
-                .startLine = m_startLine_,
-                .startColumn = m_startColumn_,
-                .endLine = m_line_,
-                .endColumn = m_column_,
+                .file = m_file_,
+                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
+                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
+                .beginIt = m_startIterated_,
+                .endIt = m_iterated_,
             },
         .text = view,
     });
@@ -184,8 +191,10 @@ class IrTokenizer {
     if (view == "div")
       return IrTokenKind::KywDiv;
 
-    if (view == "ret")
-      return IrTokenKind::KywRet;
+    if (view == "dup")
+      return IrTokenKind::KywDup;
+    if (view == "exit")
+      return IrTokenKind::KywExit;
 
     if (view == "call")
       return IrTokenKind::KywCall;
@@ -204,10 +213,24 @@ class IrTokenizer {
     if (view == "dbg_dump")
       return IrTokenKind::KywDbgDump;
 
+    if (view == "eq")
+      return IrTokenKind::KywEq;
+    if (view == "ne")
+      return IrTokenKind::KywNe;
+    if (view == "lt")
+      return IrTokenKind::KywLt;
+    if (view == "le")
+      return IrTokenKind::KywLe;
+    if (view == "gt")
+      return IrTokenKind::KywGt;
+    if (view == "ge")
+      return IrTokenKind::KywGe;
+
     return IrTokenKind::Unknown;
   }
 
  private:
+  size_t   m_file_{ 0 };
   uint32_t m_line_{ 1 };
   uint32_t m_column_{ 1 };
 
@@ -250,8 +273,10 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
     case IrTokenKind::KywDiv:
       return "<div>";
 
-    case IrTokenKind::KywRet:
-      return "<ret>";
+    case IrTokenKind::KywDup:
+      return "<dup>";
+    case IrTokenKind::KywExit:
+      return "<exit>";
 
     case IrTokenKind::KywCall:
       return "<call>";
@@ -269,6 +294,19 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
 
     case IrTokenKind::KywDbgDump:
       return "<dbg_dump>";
+
+    case IrTokenKind::KywEq:
+      return "<eq>";
+    case IrTokenKind::KywNe:
+      return "<ne>";
+    case IrTokenKind::KywLt:
+      return "<lt>";
+    case IrTokenKind::KywLe:
+      return "<le>";
+    case IrTokenKind::KywGt:
+      return "<gt>";
+    case IrTokenKind::KywGe:
+      return "<ge>";
 
     case IrTokenKind::Colon:
       return "<colon>";

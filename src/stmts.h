@@ -8,8 +8,8 @@
 #include <variant>
 #include <vector>
 
+#include "diagnostic/source.h"
 #include "exprs.h"
-#include "source.h"
 
 enum class BlockItemKind : uint8_t { Undefined, Statement, Declaration };
 

@@ -7,7 +7,7 @@
 #include <string_view>
 #include <variant>
 
-#include "source.h"
+#include "diagnostic/source.h"
 #include "stmts.h"
 #include "types.h"
 

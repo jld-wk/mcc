@@ -11,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-#include "source.h"
+#include "diagnostic/source.h"
 
 enum class TokenKind : uint8_t {
   KywDo,
@@ -141,7 +141,8 @@ struct Token {
 
 class Tokenizer {
  public:
-  auto tokenize(std::string_view stream) -> const std::vector<Token>& {
+  auto tokenize(FileId file, std::string_view stream) -> const std::vector<Token>& {
+    m_file_ = file;
     m_source_ = stream;
     m_sourceIt_ = stream.begin();
 
@@ -153,7 +154,7 @@ class Tokenizer {
       iterate();
 
       if (c == '\0') {
-        push_token(TokenKind::EndOfFile, 1);
+        push_token(TokenKind::EndOfFile);
         return m_tokens_;
       }
 
@@ -181,7 +182,7 @@ class Tokenizer {
 
       if (std::isdigit(c)) {
         while (is_identifier(*m_sourceIt_)) iterate();
-        push_token_from(TokenKind::Number);
+        push_token(TokenKind::Number);
         continue;
       }
 
@@ -197,11 +198,11 @@ class Tokenizer {
           if (kind == TokenKind::Unknown) {
             m_column_ -= 1;
             m_iterated_ -= 2;
-            push_token(len1_symbol_kind(view[0]), 1);
+            push_token(len1_symbol_kind(view[0]));
             m_column_ += 1;
             m_iterated_ += 1;
             m_startColumn_ += 1;
-            push_token(len1_symbol_kind(view[1]), 1);
+            push_token(len1_symbol_kind(view[1]));
             m_iterated_ += 1;
             continue;
           }
@@ -210,7 +211,7 @@ class Tokenizer {
           continue;
         }
 
-        push_token_from(len1_symbol_kind(c));
+        push_token(len1_symbol_kind(c));
         continue;
       }
 
@@ -245,33 +246,16 @@ class Tokenizer {
     return std::string_view{ m_source_.data() + m_startIterated_, size };
   }
 
-  void push_token(TokenKind kind, size_t size) {
+  void push_token(TokenKind kind) {
     m_tokens_.push_back(Token{
         .kind = kind,
         .source =
             SourceRange{
-                .start = m_iterated_,
-                .end = m_iterated_ + size,
-                .startLine = m_startLine_,
-                .startColumn = m_startColumn_,
-                .endLine = m_line_,
-                .endColumn = m_column_,
-            },
-        .text = std::string_view{ m_source_.data() + m_iterated_, size },
-    });
-  }
-
-  void push_token_from(TokenKind kind) {
-    m_tokens_.push_back(Token{
-        .kind = kind,
-        .source =
-            SourceRange{
-                .start = m_startIterated_,
-                .end = m_iterated_,
-                .startLine = m_startLine_,
-                .startColumn = m_startColumn_,
-                .endLine = m_line_,
-                .endColumn = m_column_,
+                .file = m_file_,
+                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
+                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
+                .beginIt = m_startIterated_,
+                .endIt = m_iterated_,
             },
         .text = str_view(),
     });
@@ -282,12 +266,11 @@ class Tokenizer {
         .kind = kind,
         .source =
             SourceRange{
-                .start = m_startIterated_,
-                .end = m_iterated_,
-                .startLine = m_startLine_,
-                .startColumn = m_startColumn_,
-                .endLine = m_line_,
-                .endColumn = m_column_,
+                .file = m_file_,
+                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
+                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
+                .beginIt = m_startIterated_,
+                .endIt = m_iterated_,
             },
         .text = view,
     });
@@ -545,6 +528,7 @@ class Tokenizer {
   }
 
  private:
+  FileId   m_file_{ 0 };
   uint32_t m_line_{ 1 };
   uint32_t m_column_{ 1 };
 

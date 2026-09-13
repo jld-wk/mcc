@@ -1,21 +1,24 @@
 ; SPDX-FileCopyrightText: (c) 2026 Julian Duwe
 ; SPDX-License-Identifier: Apache-2.0
 
-main:
+entry:
   push 6
   store n
   load n
   call factorial
   dbg_dump
   push 0
-  ret
+  exit
 
 factorial:
   load n
   push 1
   sub
-  jmp_f factorial_exit
-  jmp_t factorial_recursive
+  dup
+  push 0
+  eq
+  jmp_f factorial_recursive
+  jmp factorial_exit
 
 factorial_recursive:
   store n2

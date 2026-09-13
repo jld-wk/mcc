@@ -1,0 +1,24 @@
+; SPDX-FileCopyrightText: (c) 2026 Julian Duwe
+; SPDX-License-Identifier: Apache-2.0
+
+entry:
+  call L0
+  push 0
+  exit
+
+L0:
+  push 3
+  store L0_i
+  jmp L1
+
+L1:
+  load L0_i
+  jmp_t L2
+
+L2:
+  load L0_i
+  dbg_dump
+  push 1
+  sub
+  store L0_i
+  jmp L1

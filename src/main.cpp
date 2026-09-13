@@ -2,20 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <cassert>
-#include <cstddef>
 #include <exception>
-#include <fstream>
-#include <ios>
 #include <print>
+#include <span>
 #include <string_view>
 #include <variant>
 #include <vector>
 
 #include "decls.h"
+#include "diagnostic/core.h"
+#include "diagnostic/source.h"
+#include "diagnostic/source_manager.h"
 #include "ir/interpreter.h"
 #include "passes/semantic.h"
 #include "syntaxer.h"
-#include "tokenize.h"
+#include "tokenizer.h"
 #include "type_arena.h"
 #include "utility.h"
 
@@ -23,25 +24,19 @@ auto main() -> int {
   try {
     std::println("Hello mcc !\n");
 
-    std::fstream file{ "source.c" };
-    file.seekg(0, std::ios::end);
-    size_t size = static_cast<size_t>(file.tellg());
-    file.seekg(0, std::ios::beg);
+    SourceManager source_manager;
+    // TODO(jld-wk): NO!
+    Diagnostics::init(&source_manager);
 
-    std::vector<char> buf(size + 1);
-    buf[size] = '\0';
-
-    file.read(buf.data(), static_cast<std::streamsize>(size));
-
-    std::string_view source{ buf.data(), size + 1 };
+    FileId           file = source_manager.open("source.c");
+    std::span<char>  source_buf = source_manager.query(file).source;
+    std::string_view source{ source_buf.data(), source_buf.size() };
 
     Tokenizer                 tokenizer;
-    const std::vector<Token>& tokens = tokenizer.tokenize(source);
+    const std::vector<Token>& tokens = tokenizer.tokenize(file, source);
 
     for (const Token& token : tokens)
-      std::println("{} {} -> line(s/e): {}/{} | col(s/e): {}/{}", format_token_kind(token.kind),
-                   token.text, token.source.startLine, token.source.endLine,
-                   token.source.startColumn, token.source.endColumn);
+      std::println("{} -> {}", format_token_kind(token.kind), token.text);
     std::println("");
 
     TypeArena types;
@@ -69,7 +64,7 @@ auto main() -> int {
     std::println("");
 
     IrInterpreter interpreter;
-    interpreter.interpret_file("source.ir");
+    interpreter.interpret_file("source.ir", source_manager);
 
   } catch (const std::exception& e) {
     return 1;

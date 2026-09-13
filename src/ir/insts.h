@@ -8,10 +8,10 @@
 #include <variant>
 #include <vector>
 
-#include "source.h"
+#include "diagnostic/source.h"
 
 struct PushInst {
-  int number{ 0 };
+  int number;
 };
 struct PopInst {};
 
@@ -27,7 +27,8 @@ struct SubInst {};
 struct MulInst {};
 struct DivInst {};
 
-struct RetInst {};
+struct DupInst {};
+struct ExitInst {};
 
 struct JmpInst {
   std::string_view branch;
@@ -51,9 +52,17 @@ struct CallFInst {
 
 struct DbgDumpInst {};
 
+struct EqInst {};
+struct NeInst {};
+struct LtInst {};
+struct LeInst {};
+struct GtInst {};
+struct GeInst {};
+
 using InstVariant =
     std::variant<PushInst, PopInst, StoreInst, LoadInst, AddInst, SubInst, MulInst, DivInst,
-                 RetInst, JmpInst, JmpTInst, JmpFInst, CallInst, CallTInst, CallFInst, DbgDumpInst>;
+                 DupInst, ExitInst, JmpInst, JmpTInst, JmpFInst, CallInst, CallTInst, CallFInst,
+                 DbgDumpInst, EqInst, NeInst, LtInst, LeInst, GtInst, GeInst>;
 
 struct Inst {
   InstVariant variant;

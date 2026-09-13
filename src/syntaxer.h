@@ -13,10 +13,10 @@
 
 #include "arena.h"
 #include "decls.h"
+#include "diagnostic/source.h"
 #include "exprs.h"
-#include "source.h"
 #include "stmts.h"
-#include "tokenize.h"
+#include "tokenizer.h"
 #include "type_arena.h"
 #include "types.h"
 #include "utility.h"

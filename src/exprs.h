@@ -6,7 +6,7 @@
 
 #include <variant>
 
-#include "source.h"
+#include "diagnostic/source.h"
 #include "types.h"
 
 struct IntLiteralExpr {
