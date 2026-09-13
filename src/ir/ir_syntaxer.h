@@ -47,122 +47,203 @@ class IrSyntaxer {
     return number;
   }
 
+  [[nodiscard]] auto build_inst_paramter(bool* ok) -> InstParameter {
+    const IrToken& cur{ current() };
+    if (match(IrTokenKind::Number)) {
+      std::string_view view{ cur.text };
+      size_t           number{ 0 };
+      std::from_chars(view.data(), view.data() + view.length(), number);
+      return number;
+    }
+
+    *ok = expect(IrTokenKind::Identifier);
+    return cur.text;
+  }
+
+  [[nodiscard]] auto comparision_kind(IrTokenKind kind) -> ComparisionInstKind {
+    return kind == IrTokenKind::KywEq   ? ComparisionInstKind::Eq
+           : kind == IrTokenKind::KywNe ? ComparisionInstKind::Ne
+           : kind == IrTokenKind::KywLt ? ComparisionInstKind::Lt
+           : kind == IrTokenKind::KywLe ? ComparisionInstKind::Le
+           : kind == IrTokenKind::KywGt ? ComparisionInstKind::Gt
+                                        : ComparisionInstKind::Ge;
+  }
+
   [[nodiscard]] auto build_inst() -> Inst* {
     const IrToken& start{ current() };
 
-    if (match(IrTokenKind::KywPush)) {
-      const IrToken& end{ current() };
-      bool           ok{ true };
-      size_t         number{ build_number(&ok) };
-      if (!ok) {
-        // TODO(jld-wk): thats not okay!
-      }
-      return m_insts_.emplace(PushInst{ .number = number },
-                              source_range_from(start.source, end.source));
-    }
+    if (match(IrTokenKind::KywStore) || match(IrTokenKind::KywStoreRet) ||
+        match(IrTokenKind::KywStoreParam)) {
+      bool          ok = true;
+      InstParameter a = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
 
-    if (match(IrTokenKind::KywPop))
-      return m_insts_.emplace(PopInst{}, start.source);
-
-    if (match(IrTokenKind::KywStore)) {
       const IrToken& end{ current() };
       expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(StoreInst{ .identifier = end.text },
+
+      StoreInstKind kind = start.kind == IrTokenKind::KywStore      ? StoreInstKind::Local
+                           : start.kind == IrTokenKind::KywStoreRet ? StoreInstKind::Ret
+                                                                    : StoreInstKind::Param;
+      return m_insts_.emplace(StoreInst{ .kind = kind, .a = a, .toVar = end.text },
                               source_range_from(start.source, end.source));
     }
 
-    if (match(IrTokenKind::KywLoad)) {
+    if (match(IrTokenKind::KywLoad) || match(IrTokenKind::KywLoadRet) ||
+        match(IrTokenKind::KywLoadParam)) {
+      const IrToken& a{ current() };
+      expect(IrTokenKind::Identifier);
+      expect(IrTokenKind::Comma);
+
       const IrToken& end{ current() };
       expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(LoadInst{ .identifier = end.text },
+
+      LoadInstKind kind = start.kind == IrTokenKind::KywLoad      ? LoadInstKind::Local
+                          : start.kind == IrTokenKind::KywLoadRet ? LoadInstKind::Ret
+                                                                  : LoadInstKind::Param;
+      return m_insts_.emplace(LoadInst{ .kind = kind, .a = a.text, .toVar = end.text },
                               source_range_from(start.source, end.source));
     }
 
-    if (match(IrTokenKind::KywAdd))
-      return m_insts_.emplace(AddInst{}, start.source);
-    if (match(IrTokenKind::KywSub))
-      return m_insts_.emplace(SubInst{}, start.source);
-    if (match(IrTokenKind::KywMul))
-      return m_insts_.emplace(MulInst{}, start.source);
-    if (match(IrTokenKind::KywDiv))
-      return m_insts_.emplace(DivInst{}, start.source);
+    if (match(IrTokenKind::KywAdd) || match(IrTokenKind::KywSub) || match(IrTokenKind::KywMul) ||
+        match(IrTokenKind::KywDiv)) {
+      bool          ok = true;
+      InstParameter a = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
+      InstParameter b = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
 
-    if (match(IrTokenKind::KywEq))
-      return m_insts_.emplace(EqInst{}, start.source);
-    if (match(IrTokenKind::KywNe))
-      return m_insts_.emplace(NeInst{}, start.source);
-    if (match(IrTokenKind::KywLt))
-      return m_insts_.emplace(LtInst{}, start.source);
-    if (match(IrTokenKind::KywLe))
-      return m_insts_.emplace(LeInst{}, start.source);
-    if (match(IrTokenKind::KywGt))
-      return m_insts_.emplace(GtInst{}, start.source);
-    if (match(IrTokenKind::KywGe))
-      return m_insts_.emplace(GeInst{}, start.source);
-
-    if (match(IrTokenKind::KywJmp)) {
       const IrToken& end{ current() };
       expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(JmpInst{ .branch = end.text },
+
+      ArithmeticInstKind kind = start.kind == IrTokenKind::KywAdd   ? ArithmeticInstKind::Add
+                                : start.kind == IrTokenKind::KywSub ? ArithmeticInstKind::Sub
+                                : start.kind == IrTokenKind::KywMul ? ArithmeticInstKind::Mul
+                                                                    : ArithmeticInstKind::Div;
+      return m_insts_.emplace(ArithmeticInst{ .kind = kind, .a = a, .b = b, .toVar = end.text },
                               source_range_from(start.source, end.source));
     }
 
-    if (match(IrTokenKind::KywJmpT)) {
+    if (match(IrTokenKind::KywEq) || match(IrTokenKind::KywNe) || match(IrTokenKind::KywLt) ||
+        match(IrTokenKind::KywLe) || match(IrTokenKind::KywGt) || match(IrTokenKind::KywGe)) {
+      bool          ok = true;
+      InstParameter a = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
+      InstParameter b = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
+
       const IrToken& end{ current() };
       expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(JmpTInst{ .branch = end.text },
+
+      return m_insts_.emplace(
+          ComparisionInst{
+              .kind = comparision_kind(start.kind), .a = a, .b = b, .toVar = end.text },
+          source_range_from(start.source, end.source));
+    }
+
+    if (match(IrTokenKind::KywJmp) || match(IrTokenKind::KywCall)) {
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+
+      return m_insts_.emplace(
+          BranchInst{ .kind = start.kind == IrTokenKind::KywJmp ? BranchInstKind::Jmp
+                                                                : BranchInstKind::Call,
+                      .toBranch = end.text },
+          source_range_from(start.source, end.source));
+    }
+
+    if (match(IrTokenKind::KywJmpIf) || match(IrTokenKind::KywCallIf)) {
+      bool          ok = true;
+      InstParameter a = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
+      InstParameter b = build_inst_paramter(&ok);
+
+      expect(IrTokenKind::Comma);
+      ComparisionInstKind cmp_kind = comparision_kind(advance().kind);
+      expect(IrTokenKind::Comma);
+
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+
+      return m_insts_.emplace(
+          BranchIfInst{ .kind = start.kind == IrTokenKind::KywJmpIf ? BranchInstKind::Jmp
+                                                                    : BranchInstKind::Call,
+                        .a = a,
+                        .b = b,
+                        .cmpKind = cmp_kind,
+                        .toBranch = end.text },
+          source_range_from(start.source, end.source));
+    }
+
+    if (match(IrTokenKind::KywAlloc)) {
+      bool          ok = true;
+      InstParameter a = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+
+      return m_insts_.emplace(AllocInst{ .a = a, .toVar = end.text },
                               source_range_from(start.source, end.source));
     }
 
-    if (match(IrTokenKind::KywJmpF)) {
+    if (match(IrTokenKind::KywFree)) {
       const IrToken& end{ current() };
       expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(JmpFInst{ .branch = end.text },
-                              source_range_from(start.source, end.source));
-    }
-    if (match(IrTokenKind::KywCall)) {
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(CallInst{ .branch = end.text },
-                              source_range_from(start.source, end.source));
-    }
-    if (match(IrTokenKind::KywCallT)) {
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(CallTInst{ .branch = end.text },
-                              source_range_from(start.source, end.source));
-    }
-    if (match(IrTokenKind::KywCallF)) {
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(CallFInst{ .branch = end.text },
+      return m_insts_.emplace(FreeInst{ .identifier = end.text },
                               source_range_from(start.source, end.source));
     }
 
-    if (match(IrTokenKind::KywAlloc))
-      return m_insts_.emplace(AllocInst{}, start.source);
-    if (match(IrTokenKind::KywFree))
-      return m_insts_.emplace(FreeInst{}, start.source);
+    if (match(IrTokenKind::KywLoadAddr)) {
+      const IrToken& a{ current() };
+      expect(IrTokenKind::Identifier);
+      expect(IrTokenKind::Comma);
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+
+      return m_insts_.emplace(LoadAddrInst{ .a = a.text, .toVar = end.text },
+                              source_range_from(start.source, end.source));
+    }
+
+    if (match(IrTokenKind::KywStorePtr)) {
+      bool          ok = true;
+      InstParameter a = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
+      InstParameter b = build_inst_paramter(&ok);
+      expect(IrTokenKind::Comma);
+
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+
+      return m_insts_.emplace(StorePtrInst{ .a = a, .b = b, .toVar = end.text },
+                              source_range_from(start.source, end.source));
+    }
 
     if (match(IrTokenKind::KywStoreAddr)) {
+      const IrToken& a{ current() };
+      expect(IrTokenKind::Identifier);
+      expect(IrTokenKind::Comma);
       const IrToken& end{ current() };
       expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(StoreAddrInst{ .identifier = end.text },
+
+      return m_insts_.emplace(StoreAddrInst{ .a = a.text, .toVar = end.text },
                               source_range_from(start.source, end.source));
     }
-    if (match(IrTokenKind::KywLoadAddr))
-      return m_insts_.emplace(LoadAddrInst{}, start.source);
 
-    if (match(IrTokenKind::KywDup))
-      return m_insts_.emplace(DupInst{}, start.source);
+    if (match(IrTokenKind::KywExit)) {
+      bool          ok = true;
+      InstParameter a = build_inst_paramter(&ok);
+      return m_insts_.emplace(ExitInst{ .a = a }, start.source);
+    }
 
-    if (match(IrTokenKind::KywExit))
-      return m_insts_.emplace(ExitInst{}, start.source);
+    if (match(IrTokenKind::KywDumpD) || match(IrTokenKind::KywDumpC)) {
+      bool          ok = true;
+      InstParameter a = build_inst_paramter(&ok);
 
-    if (match(IrTokenKind::KywDumpD))
-      return m_insts_.emplace(DumpDInst{}, start.source);
-    if (match(IrTokenKind::KywDumpC))
-      return m_insts_.emplace(DumpCInst{}, start.source);
+      return m_insts_.emplace(
+          DumpInst{ .kind = start.kind == IrTokenKind::KywDumpD ? DumpInstKind::Decimal
+                                                                : DumpInstKind::Char,
+                    .a = a },
+          start.source);
+    }
 
     // TODO(jld-wk): print diagnostic
     return nullptr;
@@ -177,13 +258,15 @@ class IrSyntaxer {
       // same thing... again..
     }
 
+    bool _ = match(IrTokenKind::Minus);
+
     std::vector<Inst*> insts;
-    while (!peek(IrTokenKind::Identifier) && !peek(IrTokenKind::EndOfFile)) {
+    while (!peek(IrTokenKind::Minus) && !peek(IrTokenKind::EndOfFile)) {
       Inst* inst = build_inst();
       insts.push_back(inst);
     }
 
-    const IrToken& end{ previous() };
+    const IrToken& end{ advance() };
     return m_branches_.emplace(insts, start.text, source_range_from(start.source, end.source));
   }
 
@@ -222,6 +305,7 @@ class IrSyntaxer {
     bool matches{ match(kind) };
     if (!matches) {
       // TODO(jld-wk) print diagnostic
+      assert(false);
     }
     return matches;
   }

@@ -2,106 +2,31 @@
 ; SPDX-License-Identifier: Apache-2.0
 
 entry:
+-
+store 6, n
+call factorial
+dump_d result
 
-push 7
-call new_str
+store 10, new_line_c
+dump_c new_line_c
 
-load str
-store my_own_str
-load len
-store my_own_str_len
+exit 0
+-
 
-push 72
-call add_char
-push 101
-call add_char
-push 108
-call add_char
-push 108
-call add_char
-push 111
-call add_char
-push 33
-call add_char
-push 10
-call add_char
+factorial:
+-
+store n, result
+jmp factorial_cond
+-
 
-load my_own_str
-load my_own_str_len
-call print_str
+factorial_cond:
+-
+sub n, 1, n
+jmp_if n, 0, ne, factorial_impl
+-
 
-push 2
-call new_str
-
-load str
-store my_own_str_2
-load len
-store my_own_str_len_2
-
-push 63
-call add_char
-push 10
-call add_char
-
-load my_own_str_2
-load my_own_str_len_2
-call print_str
-
-load my_own_str
-free
-
-load my_own_str_2
-free
-
-push 0
-exit
-
-new_str:
-  store len
-  load len
-  alloc
-  store str
-
-  push 0
-  store pos
-
-add_char:
-  store char
-
-  load pos
-  load char
-  store_addr str
-
-  load pos
-  push 1
-  add
-  store pos
-
-print_str:
-  store len
-  store str
-  push 0
-  store pos
-
-  jmp print_str_impl
-
-print_str_impl:
-  load pos
-  load len
-  eq
-  jmp_t end_branch
-
-  load str
-  load pos
-  add
-  load_addr
-  dump_c
-
-  load pos
-  push 1
-  add
-  store pos
-
-  jmp print_str_impl
-
-end_branch:
+factorial_impl:
+-
+mul result, n, result
+jmp factorial_cond
+-

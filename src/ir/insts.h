@@ -5,73 +5,115 @@
 #define JLD_MCC_IR_INSTS_H
 
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 #include <variant>
 #include <vector>
 
 #include "diagnostic/source.h"
 
-struct PushInst {
-  size_t number;
-};
-struct PopInst {};
+using InstParameter = std::variant<std::string_view, size_t>;
+
+enum class StoreInstKind : uint8_t { Local, Ret, Param };
 
 struct StoreInst {
-  std::string_view identifier;
+  StoreInstKind kind;
+
+  InstParameter    a;
+  std::string_view toVar;
 };
+
+enum class LoadInstKind : uint8_t { Local, Ret, Param };
+
 struct LoadInst {
+  LoadInstKind kind;
+
+  std::string_view a;
+  std::string_view toVar;
+};
+
+enum class ArithmeticInstKind : uint8_t {
+  Add,
+  Sub,
+  Mul,
+  Div,
+};
+
+struct ArithmeticInst {
+  ArithmeticInstKind kind;
+
+  InstParameter    a;
+  InstParameter    b;
+  std::string_view toVar;
+};
+
+enum class ComparisionInstKind : uint8_t { Eq, Ne, Lt, Le, Gt, Ge };
+
+struct ComparisionInst {
+  ComparisionInstKind kind;
+
+  InstParameter    a;
+  InstParameter    b;
+  std::string_view toVar;
+};
+
+enum class BranchInstKind : uint8_t { Jmp, Call };
+
+struct BranchInst {
+  BranchInstKind kind;
+
+  std::string_view toBranch;
+};
+
+struct BranchIfInst {
+  BranchInstKind kind;
+
+  InstParameter       a;
+  InstParameter       b;
+  ComparisionInstKind cmpKind;
+  std::string_view    toBranch;
+};
+
+struct AllocInst {
+  InstParameter    a;
+  std::string_view toVar;
+};
+
+struct FreeInst {
   std::string_view identifier;
 };
 
-struct AddInst {};
-struct SubInst {};
-struct MulInst {};
-struct DivInst {};
-
-struct EqInst {};
-struct NeInst {};
-struct LtInst {};
-struct LeInst {};
-struct GtInst {};
-struct GeInst {};
-struct JmpInst {
-  std::string_view branch;
-};
-struct JmpTInst {
-  std::string_view branch;
-};
-struct JmpFInst {
-  std::string_view branch;
-};
-struct CallInst {
-  std::string_view branch;
-};
-struct CallTInst {
-  std::string_view branch;
-};
-struct CallFInst {
-  std::string_view branch;
+struct LoadAddrInst {
+  std::string_view a;
+  std::string_view toVar;
 };
 
-struct AllocInst {};
-struct FreeInst {};
+struct StorePtrInst {
+  InstParameter    a;
+  InstParameter    b;
+  std::string_view toVar;
+};
+
 struct StoreAddrInst {
-  std::string_view identifier;
+  std::string_view a;
+  std::string_view toVar;
 };
-struct LoadAddrInst {};
 
-struct DupInst {};
+struct ExitInst {
+  InstParameter a;
+};
 
-struct ExitInst {};
+enum class DumpInstKind : uint8_t { Decimal, Char };
 
-struct DumpDInst {};
-struct DumpCInst {};
+struct DumpInst {
+  DumpInstKind kind;
 
-using InstVariant =
-    std::variant<PushInst, PopInst, StoreInst, LoadInst, AddInst, SubInst, MulInst, DivInst, EqInst,
-                 NeInst, LtInst, LeInst, GtInst, GeInst, JmpInst, JmpTInst, JmpFInst, CallInst,
-                 CallTInst, CallFInst, AllocInst, FreeInst, StoreAddrInst, LoadAddrInst, DupInst,
-                 ExitInst, DumpDInst, DumpCInst>;
+  InstParameter a;
+};
+
+using InstVariant = std::variant<StoreInst, LoadInst, ArithmeticInst, ComparisionInst, BranchInst,
+                                 BranchIfInst, AllocInst, FreeInst, LoadAddrInst, StorePtrInst,
+                                 StoreAddrInst, ExitInst, DumpInst>;
 
 struct Inst {
   InstVariant variant;

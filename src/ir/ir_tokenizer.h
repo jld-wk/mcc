@@ -17,11 +17,13 @@ enum class IrTokenKind : uint8_t {
   Number,
   Identifier,
 
-  KywPush,
-  KywPop,
-
   KywLoad,
+  KywLoadRet,
+  KywLoadParam,
+
   KywStore,
+  KywStoreRet,
+  KywStoreParam,
 
   KywAdd,
   KywSub,
@@ -36,26 +38,25 @@ enum class IrTokenKind : uint8_t {
   KywGe,
 
   KywJmp,
-  KywJmpT,
-  KywJmpF,
   KywCall,
-  KywCallT,
-  KywCallF,
-
-  KywDup,
+  KywJmpIf,
+  KywCallIf,
 
   KywAlloc,
   KywFree,
   KywLoadAddr,
+  KywStorePtr,
   KywStoreAddr,
 
   KywExit,
+  KywStack,
 
   KywDumpD,
   KywDumpC,
 
   Colon,
-  Semicolon,
+  Comma,
+  Minus,
 
   Unknown,
   EndOfFile
@@ -124,6 +125,32 @@ class IrTokenizer {
         continue;
       }
 
+      if (c == ',') {
+        push_token(IrTokenKind::Comma);
+        continue;
+      }
+
+      if (c == '-') {
+        push_token(IrTokenKind::Minus);
+        continue;
+      }
+
+      // TODO(jld-wk): Not sure, if that even has a reason to exist, maybe temporaries stored
+      // directly into registers?
+      if (c == '[') {
+        iterate();
+        if (*m_sourceIt_ != 's') {
+          // invalid
+        }
+        iterate();
+        if (*m_sourceIt_ != ']') {
+          // TODO(jld-wk): print diagnostic
+        }
+
+        push_token(IrTokenKind::KywStack);
+        continue;
+      }
+
       // TODO(jld-wk): print diagnostic
     }
 
@@ -178,15 +205,19 @@ class IrTokenizer {
   }
 
   auto keyword_kind(std::string_view view) -> IrTokenKind {
-    if (view == "push")
-      return IrTokenKind::KywPush;
-    if (view == "pop")
-      return IrTokenKind::KywPop;
+    if (view == "load")
+      return IrTokenKind::KywLoad;
+    if (view == "load_ret")
+      return IrTokenKind::KywLoadRet;
+    if (view == "load_param")
+      return IrTokenKind::KywLoadParam;
 
     if (view == "store")
       return IrTokenKind::KywStore;
-    if (view == "load")
-      return IrTokenKind::KywLoad;
+    if (view == "store_ret")
+      return IrTokenKind::KywStoreRet;
+    if (view == "store_param")
+      return IrTokenKind::KywStoreParam;
 
     if (view == "add")
       return IrTokenKind::KywAdd;
@@ -212,28 +243,23 @@ class IrTokenizer {
 
     if (view == "jmp")
       return IrTokenKind::KywJmp;
-    if (view == "jmp_t")
-      return IrTokenKind::KywJmpT;
-    if (view == "jmp_f")
-      return IrTokenKind::KywJmpF;
     if (view == "call")
       return IrTokenKind::KywCall;
-    if (view == "call_t")
-      return IrTokenKind::KywCallT;
-    if (view == "call_f")
-      return IrTokenKind::KywCallF;
-
-    if (view == "dup")
-      return IrTokenKind::KywDup;
+    if (view == "jmp_if")
+      return IrTokenKind::KywJmpIf;
+    if (view == "call_if")
+      return IrTokenKind::KywCallIf;
 
     if (view == "alloc")
       return IrTokenKind::KywAlloc;
     if (view == "free")
       return IrTokenKind::KywFree;
-    if (view == "store_addr")
-      return IrTokenKind::KywStoreAddr;
     if (view == "load_addr")
       return IrTokenKind::KywLoadAddr;
+    if (view == "store_addr")
+      return IrTokenKind::KywStoreAddr;
+    if (view == "store_ptr")
+      return IrTokenKind::KywStorePtr;
 
     if (view == "exit")
       return IrTokenKind::KywExit;
@@ -271,15 +297,19 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
     case IrTokenKind::Identifier:
       return "<identifier>";
 
-    case IrTokenKind::KywPush:
-      return "<push>";
-    case IrTokenKind::KywPop:
-      return "<pop>";
+    case IrTokenKind::KywLoad:
+      return "<load>";
+    case IrTokenKind::KywLoadRet:
+      return "<load_ret>";
+    case IrTokenKind::KywLoadParam:
+      return "<load_param>";
 
     case IrTokenKind::KywStore:
       return "<store>";
-    case IrTokenKind::KywLoad:
-      return "<load>";
+    case IrTokenKind::KywStoreRet:
+      return "<store_ret>";
+    case IrTokenKind::KywStoreParam:
+      return "<store_param>";
 
     case IrTokenKind::KywAdd:
       return "<add>";
@@ -305,28 +335,26 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
 
     case IrTokenKind::KywJmp:
       return "<jmp>";
-    case IrTokenKind::KywJmpT:
-      return "<jmp_t>";
-    case IrTokenKind::KywJmpF:
-      return "<jmp_f>";
     case IrTokenKind::KywCall:
       return "<call>";
-    case IrTokenKind::KywCallT:
-      return "<call_t>";
-    case IrTokenKind::KywCallF:
-      return "<call_f>";
+    case IrTokenKind::KywJmpIf:
+      return "<jmp_if>";
+    case IrTokenKind::KywCallIf:
+      return "<call_if>";
 
     case IrTokenKind::KywAlloc:
       return "<alloc>";
     case IrTokenKind::KywFree:
       return "<free>";
-    case IrTokenKind::KywStoreAddr:
-      return "<store_addr>";
     case IrTokenKind::KywLoadAddr:
       return "<load_addr>";
+    case IrTokenKind::KywStorePtr:
+      return "<store_ptr>";
+    case IrTokenKind::KywStoreAddr:
+      return "<store_addr>";
 
-    case IrTokenKind::KywDup:
-      return "<dup>";
+    case IrTokenKind::KywStack:
+      return "<stack-top>";
 
     case IrTokenKind::KywExit:
       return "<exit>";
@@ -338,8 +366,10 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
 
     case IrTokenKind::Colon:
       return "<colon>";
-    case IrTokenKind::Semicolon:
-      return "<semicolon>";
+    case IrTokenKind::Comma:
+      return "<comma>";
+    case IrTokenKind::Minus:
+      return "<minus>";
 
     case IrTokenKind::Unknown:
       return "<unknown>";

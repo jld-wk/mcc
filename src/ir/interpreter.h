@@ -4,6 +4,7 @@
 #ifndef JLD_MCC_IR_INTERPRETER_H
 #define JLD_MCC_IR_INTERPRETER_H
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <format>
@@ -69,51 +70,6 @@ class IrInterpreter {
   }
 
  private:
-  auto expect_val(const char* name, Inst* inst, bool* con, bool consume = true) -> size_t {
-    if (m_stack_.empty()) {
-      Diagnostics::report(Diagnostic{
-          .severity = DiagnosticSeverity::Fatal,
-          .range = inst->source,
-          .message = std::format("'{}' instruction expects 1 value on the stack", name),
-          .notes = {},
-      });
-
-      m_exit_ = true;
-      *con = false;
-      return 0;
-    }
-
-    size_t a = m_stack_.top();
-    if (consume)
-      m_stack_.pop();
-    return a;
-  }
-
-  auto expect_2val(const char* name, Inst* inst, bool* con, size_t* b, bool consume = true)
-      -> size_t {
-    if (m_stack_.size() < 2) {
-      Diagnostics::report(Diagnostic{
-          .severity = DiagnosticSeverity::Fatal,
-          .range = inst->source,
-          .message = std::format("'{}' instruction expects 2 values on the stack, found {}", name,
-                                 m_stack_.size()),
-          .notes = {},
-      });
-
-      m_exit_ = true;
-      *con = false;
-      return 0;
-    }
-
-    *b = m_stack_.top();
-    m_stack_.pop();
-
-    size_t a = m_stack_.top();
-    if (consume)
-      m_stack_.pop();
-    return a;
-  }
-
   auto execute_branch(Inst* inst, std::string_view branch_name, bool con = true) -> bool {
     const auto it{ m_branches_.find(branch_name) };
     if (it == m_branches_.end()) {
@@ -132,228 +88,135 @@ class IrInterpreter {
     return con;
   }
 
-  enum class OpKind : uint8_t { Add, Sub, Mul, Div, Eq, Ne, Gt, Ge, Lt, Le };
+  enum class LookupKind : uint8_t {
+    Local,
+    Param,
+    Ret,
+  };
 
-  auto perform_op(const char* name, Inst* inst, OpKind op) -> bool {
-    if (m_stack_.size() < 2) {
-      Diagnostics::report(Diagnostic{
-          .severity = DiagnosticSeverity::Fatal,
-          .range = inst->source,
-          .message = std::format("'{}' instruction expects 2 values on the stack, found {}", name,
-                                 m_stack_.size()),
-          .notes = {},
-      });
+  auto lookup_inst_parameter(InstParameter param) -> size_t {
+    return std::visit(
+        Overload{
+            [&](std::string_view identifier) -> size_t { return m_variables_[identifier]; },
+            [](size_t constant) -> size_t { return constant; },
+        },
+        param);
+  }
 
-      m_exit_ = true;
-      return false;
+  auto comparision_result(size_t a, size_t b, ComparisionInstKind kind) -> bool {
+    switch (kind) {
+      case ComparisionInstKind::Eq:
+        return a == b;
+      case ComparisionInstKind::Ne:
+        return a != b;
+      case ComparisionInstKind::Lt:
+        return a < b;
+      case ComparisionInstKind::Le:
+        return a <= b;
+      case ComparisionInstKind::Gt:
+        return a > b;
+      case ComparisionInstKind::Ge:
+        return a >= b;
     }
-
-    size_t b{ m_stack_.top() };
-    m_stack_.pop();
-    size_t a{ m_stack_.top() };
-    m_stack_.pop();
-
-    switch (op) {
-      case OpKind::Add:
-        m_stack_.push(a + b);
-        return true;
-      case OpKind::Sub:
-        m_stack_.push(a - b);
-        return true;
-      case OpKind::Mul:
-        m_stack_.push(a * b);
-        return true;
-      case OpKind::Div:
-        m_stack_.push(a / b);
-        return true;
-      case OpKind::Eq:
-        m_stack_.push(a == b);
-        return true;
-      case OpKind::Ne:
-        m_stack_.push(a != b);
-        return true;
-      case OpKind::Gt:
-        m_stack_.push(a > b);
-        return true;
-      case OpKind::Ge:
-        m_stack_.push(a >= b);
-        return true;
-      case OpKind::Lt:
-        m_stack_.push(a < b);
-        return true;
-      case OpKind::Le:
-        m_stack_.push(a <= b);
-        return true;
-    }
-
     return false;
   }
 
   auto interpret_inst(Inst* p_inst) -> bool {
     return std::visit(
         Overload{
-            [&](const PushInst& inst) -> bool {
-              m_stack_.push(inst.number);
-              return true;
-            },
-            [&](const PopInst&) -> bool {
-              bool con{ true };
-              expect_val("pop", p_inst, &con);
-              return con;
-            },
             [&](const StoreInst& inst) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("store", p_inst, &con) };
-              m_variables_[inst.identifier] = val;
-              return con;
+              size_t val{ lookup_inst_parameter(inst.a) };
+              m_variables_[inst.toVar] = val;
+              return true;
             },
             [&](const LoadInst& inst) -> bool {
-              const auto it{ m_variables_.find(inst.identifier) };
-              if (it == m_variables_.end()) {
-                Diagnostics::report(Diagnostic{
-                    .severity = DiagnosticSeverity::Fatal,
-                    .range = p_inst->source,
-                    .message = std::format("variable '{}' not stored yet", inst.identifier,
-                                           m_stack_.size()),
-                    .notes = {},
-                });
-
-                m_exit_ = true;
-                return false;
-              }
-
-              m_stack_.push(it->second);
+              m_variables_[inst.toVar] = m_variables_[inst.a];
               return true;
             },
-            [&](const JmpInst& inst) -> bool { return execute_branch(p_inst, inst.branch, false); },
-            [&](const JmpTInst& inst) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("jmp_t", p_inst, &con) };
-              if (!con)
-                return false;
-              if (val == 0)
-                return true;
-              return execute_branch(p_inst, inst.branch, false);
-            },
-            [&](const JmpFInst& inst) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("jmp_f", p_inst, &con) };
-              if (!con)
-                return false;
-              if (val != 0)
-                return true;
-              return execute_branch(p_inst, inst.branch, false);
-            },
-            [&](const CallInst& inst) -> bool { return execute_branch(p_inst, inst.branch); },
-            [&](const CallTInst& inst) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("call_t", p_inst, &con) };
-              if (!con)
-                return false;
-              if (val == 0)
-                return true;
-              return execute_branch(p_inst, inst.branch);
-            },
-            [&](const CallFInst& inst) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("call_f", p_inst, &con) };
-              if (!con)
-                return false;
-              if (val != 0)
-                return true;
-              return execute_branch(p_inst, inst.branch);
-            },
-            [&](const AllocInst&) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("alloc", p_inst, &con) };
-              if (con) {
-                auto* addr = static_cast<uint8_t*>(malloc(static_cast<size_t>(val)));
-                m_stack_.push(reinterpret_cast<size_t>(addr));
-              }
-              return con;
-            },
-            [&](const FreeInst&) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("free", p_inst, &con) };
-              if (con) {
-                // NOLINTNEXTLINE
-                free(reinterpret_cast<uint8_t*>(val));
-              }
-              return con;
-            },
-            [&](const StoreAddrInst& inst) -> bool {
-              bool   con{ true };
-              size_t b{ 0 };
-              size_t a{ expect_2val("store_addr", p_inst, &con, &b) };
-              if (!con)
-                return false;
+            [&](const ArithmeticInst& inst) -> bool {
+              size_t a{ lookup_inst_parameter(inst.a) };
+              size_t b{ lookup_inst_parameter(inst.b) };
 
-              const auto it{ m_variables_.find(inst.identifier) };
-              if (it == m_variables_.end()) {
-                Diagnostics::report(Diagnostic{
-                    .severity = DiagnosticSeverity::Fatal,
-                    .range = p_inst->source,
-                    .message = std::format("variable '{}' not stored yet", inst.identifier,
-                                           m_stack_.size()),
-                    .notes = {},
-                });
-
-                m_exit_ = true;
-                return false;
+              switch (inst.kind) {
+                case ArithmeticInstKind::Add:
+                  m_variables_[inst.toVar] = a + b;
+                  return true;
+                case ArithmeticInstKind::Sub:
+                  m_variables_[inst.toVar] = a - b;
+                  return true;
+                case ArithmeticInstKind::Mul:
+                  m_variables_[inst.toVar] = a * b;
+                  return true;
+                case ArithmeticInstKind::Div:
+                  m_variables_[inst.toVar] = a / b;
+                  return true;
               }
-
-              // NOLINTNEXTLINE
-              *(reinterpret_cast<uint8_t*>(it->second) + a) = static_cast<uint8_t>(b);
-              return con;
-            },
-            [&](const LoadAddrInst&) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("load_addr", p_inst, &con) };
-              if (!con)
-                return false;
-              // NOLINTNEXTLINE
-              m_stack_.push(*reinterpret_cast<uint8_t*>(val));
-              return true;
-            },
-            [&](const DupInst&) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("dup", p_inst, &con, false) };
-              if (con)
-                m_stack_.push(val);
-              return con;
-            },
-            [&](const ExitInst&) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("exit", p_inst, &con) };
-              m_exit_ = true;
-              if (con)
-                m_exitCode_ = std::optional{ val };
               return false;
             },
-            [&](const DumpDInst&) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("dump_int", p_inst, &con, false) };
-              if (con)
-                std::print("{:d}", val);
-              return con;
+            [&](const ComparisionInst& inst) -> bool {
+              size_t a{ lookup_inst_parameter(inst.a) };
+              size_t b{ lookup_inst_parameter(inst.b) };
+              m_variables_[inst.toVar] = comparision_result(a, b, inst.kind);
+              return true;
             },
-            [&](const DumpCInst&) -> bool {
-              bool   con{ true };
-              size_t val{ expect_val("dump_char", p_inst, &con, false) };
-              if (con)
-                std::print("{:c}", val);
-              return con;
+            [&](const BranchInst& inst) -> bool {
+              return execute_branch(p_inst, inst.toBranch, inst.kind != BranchInstKind::Jmp);
             },
-            [&](const AddInst&) -> bool { return perform_op("add", p_inst, OpKind::Add); },
-            [&](const SubInst&) -> bool { return perform_op("sub", p_inst, OpKind::Sub); },
-            [&](const MulInst&) -> bool { return perform_op("mul", p_inst, OpKind::Mul); },
-            [&](const DivInst&) -> bool { return perform_op("div", p_inst, OpKind::Div); },
-            [&](const EqInst&) -> bool { return perform_op("eq", p_inst, OpKind::Eq); },
-            [&](const NeInst&) -> bool { return perform_op("ne", p_inst, OpKind::Ne); },
-            [&](const LtInst&) -> bool { return perform_op("lt", p_inst, OpKind::Lt); },
-            [&](const LeInst&) -> bool { return perform_op("le", p_inst, OpKind::Le); },
-            [&](const GtInst&) -> bool { return perform_op("gt", p_inst, OpKind::Gt); },
-            [&](const GeInst&) -> bool { return perform_op("ge", p_inst, OpKind::Ge); },
+            [&](const BranchIfInst& inst) -> bool {
+              size_t a{ lookup_inst_parameter(inst.a) };
+              size_t b{ lookup_inst_parameter(inst.b) };
+              if (!comparision_result(a, b, inst.cmpKind))
+                return true;
+              return execute_branch(p_inst, inst.toBranch, inst.kind != BranchInstKind::Jmp);
+            },
+            [&](const AllocInst& inst) -> bool {
+              size_t a{ lookup_inst_parameter(inst.a) };
+              auto*  addr{ static_cast<uint8_t*>(malloc(a)) };
+              m_variables_[inst.toVar] = reinterpret_cast<size_t>(addr);
+              return true;
+            },
+            [&](const FreeInst& inst) -> bool {
+              size_t val{ m_variables_[inst.identifier] };
+              // NOLINTNEXTLINE
+              free(reinterpret_cast<uint8_t*>(val));
+              return true;
+            },
+            [&](const StorePtrInst& inst) -> bool {
+              size_t a{ lookup_inst_parameter(inst.a) };
+              size_t b{ lookup_inst_parameter(inst.b) };
+              // NOLINTNEXTLINE
+              uint8_t* ptr{ reinterpret_cast<uint8_t*>(m_variables_[inst.toVar]) };
+              *(ptr + b) = static_cast<uint8_t>(a);
+              return true;
+            },
+            [&](const StoreAddrInst& inst) -> bool {
+              m_variables_[inst.toVar] = reinterpret_cast<size_t>(&m_variables_[inst.a]);
+              return true;
+            },
+            [&](const LoadAddrInst& inst) -> bool {
+              m_variables_[inst.toVar] =
+                  // NOLINTNEXTLINE
+                  static_cast<size_t>(*reinterpret_cast<uint8_t*>(m_variables_[inst.a]));
+              return true;
+            },
+            [&](const ExitInst& inst) -> bool {
+              size_t a{ lookup_inst_parameter(inst.a) };
+              m_exit_ = true;
+              m_exitCode_ = std::optional{ a };
+              return false;
+            },
+            [&](const DumpInst& inst) -> bool {
+              size_t a{ lookup_inst_parameter(inst.a) };
+              switch (inst.kind) {
+                case DumpInstKind::Decimal:
+                  std::print("{:d}", a);
+                  return true;
+                case DumpInstKind::Char:
+                  std::print("{:c}", a);
+                  return true;
+              }
+              return false;
+            },
         },
         p_inst->variant);
   }
@@ -369,9 +232,8 @@ class IrInterpreter {
   bool                  m_exit_{ false };
   std::optional<size_t> m_exitCode_{ std::nullopt };
 
-  std::stack<size_t>                            m_stack_;
-  std::unordered_map<std::string_view, size_t>  m_variables_;
   std::unordered_map<std::string_view, Branch*> m_branches_;
+  std::unordered_map<std::string_view, size_t>  m_variables_;
 };
 
 #endif  // JLD_MCC_IR_INTERPRETER_H

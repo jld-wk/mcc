@@ -2,108 +2,54 @@
 ; SPDX-License-Identifier: Apache-2.0
 
 entry:
-
-push 7
+-
+store 6, len
 call new_str
+load str, str0_ptr
 
-load str
-store my_own_str
-load len
-store my_own_str_len
+store_ptr 72, 0, str0_ptr
+store_ptr 101, 1, str0_ptr
+store_ptr 108, 2, str0_ptr
+store_ptr 108, 3, str0_ptr
+store_ptr 111, 4, str0_ptr
+store_ptr 33, 5, str0_ptr
 
-push 72
-call add_char
-push 101
-call add_char
-push 108
-call add_char
-push 108
-call add_char
-push 111
-call add_char
-push 33
-call add_char
-push 10
-call add_char
+store 3, len
+call new_str
+load str, str1_ptr
 
-load my_own_str
-load my_own_str_len
+store_ptr 10, 0, str1_ptr
+store_ptr 63, 1, str1_ptr
+store_ptr 10, 2, str1_ptr
+
+store str0_ptr, str
 call print_str
 
-push 2
-call new_str
-
-load str
-store my_own_str_2
-load len
-store my_own_str_len_2
-
-push 63
-call add_char
-push 10
-call add_char
-
-load my_own_str_2
-load my_own_str_len_2
+store str1_ptr, str
 call print_str
 
-load my_own_str
-free
+free str0_ptr
+free str1_ptr
 
-load my_own_str_2
-free
-
-push 0
-exit
+exit 0
+-
 
 new_str:
-  store len
-  load len
-  alloc
-  store str
-
-  push 0
-  store pos
-
-add_char:
-  store char
-
-  load pos
-  load char
-  store_addr str
-
-  load pos
-  push 1
-  add
-  store pos
+-
+add len, 1, n_len
+alloc n_len, str
+store_ptr 0, len, str
+-
 
 print_str:
-  store len
-  store str
-  push 0
-  store pos
-
-  jmp print_str_impl
+-
+load_addr str, char
+jmp_if char, 0, ne, print_str_impl
+-
 
 print_str_impl:
-  load pos
-  load len
-  eq
-  jmp_t end_branch
-
-  load str
-  load pos
-  add
-  load_addr
-  dump_c
-
-  load pos
-  push 1
-  add
-  store pos
-
-  jmp print_str_impl
-
-  mul:const 4
-
-end_branch:
+-
+dump_c char
+add str, 1, str
+jmp print_str
+-
