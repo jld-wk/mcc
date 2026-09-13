@@ -34,7 +34,7 @@ class IrSyntaxer {
   }
 
  private:
-  [[nodiscard]] auto build_number(bool* ok) -> int {
+  [[nodiscard]] auto build_number(bool* ok) -> size_t {
     const IrToken& cur{ current() };
     if (!expect(IrTokenKind::Number)) {
       *ok = false;
@@ -42,7 +42,7 @@ class IrSyntaxer {
     }
 
     std::string_view view{ cur.text };
-    int              number{ 0 };
+    size_t           number{ 0 };
     std::from_chars(view.data(), view.data() + view.length(), number);
     return number;
   }
@@ -53,7 +53,7 @@ class IrSyntaxer {
     if (match(IrTokenKind::KywPush)) {
       const IrToken& end{ current() };
       bool           ok{ true };
-      int            number{ build_number(&ok) };
+      size_t         number{ build_number(&ok) };
       if (!ok) {
         // TODO(jld-wk): thats not okay!
       }
@@ -100,32 +100,6 @@ class IrSyntaxer {
     if (match(IrTokenKind::KywGe))
       return m_insts_.emplace(GeInst{}, start.source);
 
-    if (match(IrTokenKind::KywDup))
-      return m_insts_.emplace(DupInst{}, start.source);
-    if (match(IrTokenKind::KywExit))
-      return m_insts_.emplace(ExitInst{}, start.source);
-
-    if (match(IrTokenKind::KywCall)) {
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(CallInst{ .branch = end.text },
-                              source_range_from(start.source, end.source));
-    }
-
-    if (match(IrTokenKind::KywCallT)) {
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(CallTInst{ .branch = end.text },
-                              source_range_from(start.source, end.source));
-    }
-
-    if (match(IrTokenKind::KywCallF)) {
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(CallFInst{ .branch = end.text },
-                              source_range_from(start.source, end.source));
-    }
-
     if (match(IrTokenKind::KywJmp)) {
       const IrToken& end{ current() };
       expect(IrTokenKind::Identifier);
@@ -146,9 +120,49 @@ class IrSyntaxer {
       return m_insts_.emplace(JmpFInst{ .branch = end.text },
                               source_range_from(start.source, end.source));
     }
+    if (match(IrTokenKind::KywCall)) {
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+      return m_insts_.emplace(CallInst{ .branch = end.text },
+                              source_range_from(start.source, end.source));
+    }
+    if (match(IrTokenKind::KywCallT)) {
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+      return m_insts_.emplace(CallTInst{ .branch = end.text },
+                              source_range_from(start.source, end.source));
+    }
+    if (match(IrTokenKind::KywCallF)) {
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+      return m_insts_.emplace(CallFInst{ .branch = end.text },
+                              source_range_from(start.source, end.source));
+    }
 
-    if (match(IrTokenKind::KywDbgDump))
-      return m_insts_.emplace(DbgDumpInst{}, start.source);
+    if (match(IrTokenKind::KywAlloc))
+      return m_insts_.emplace(AllocInst{}, start.source);
+    if (match(IrTokenKind::KywFree))
+      return m_insts_.emplace(FreeInst{}, start.source);
+
+    if (match(IrTokenKind::KywStoreAddr)) {
+      const IrToken& end{ current() };
+      expect(IrTokenKind::Identifier);
+      return m_insts_.emplace(StoreAddrInst{ .identifier = end.text },
+                              source_range_from(start.source, end.source));
+    }
+    if (match(IrTokenKind::KywLoadAddr))
+      return m_insts_.emplace(LoadAddrInst{}, start.source);
+
+    if (match(IrTokenKind::KywDup))
+      return m_insts_.emplace(DupInst{}, start.source);
+
+    if (match(IrTokenKind::KywExit))
+      return m_insts_.emplace(ExitInst{}, start.source);
+
+    if (match(IrTokenKind::KywDumpD))
+      return m_insts_.emplace(DumpDInst{}, start.source);
+    if (match(IrTokenKind::KywDumpC))
+      return m_insts_.emplace(DumpCInst{}, start.source);
 
     // TODO(jld-wk): print diagnostic
     return nullptr;
@@ -164,8 +178,10 @@ class IrSyntaxer {
     }
 
     std::vector<Inst*> insts;
-    while (!peek(IrTokenKind::Identifier) && !peek(IrTokenKind::EndOfFile))
-      insts.push_back(build_inst());
+    while (!peek(IrTokenKind::Identifier) && !peek(IrTokenKind::EndOfFile)) {
+      Inst* inst = build_inst();
+      insts.push_back(inst);
+    }
 
     const IrToken& end{ previous() };
     return m_branches_.emplace(insts, start.text, source_range_from(start.source, end.source));

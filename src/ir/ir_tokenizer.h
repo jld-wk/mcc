@@ -28,25 +28,31 @@ enum class IrTokenKind : uint8_t {
   KywMul,
   KywDiv,
 
-  KywDup,
-  KywExit,
-
-  KywCall,
-  KywCallT,
-  KywCallF,
-
-  KywJmp,
-  KywJmpT,
-  KywJmpF,
-
-  KywDbgDump,
-
   KywEq,
   KywNe,
   KywLt,
   KywLe,
   KywGt,
   KywGe,
+
+  KywJmp,
+  KywJmpT,
+  KywJmpF,
+  KywCall,
+  KywCallT,
+  KywCallF,
+
+  KywDup,
+
+  KywAlloc,
+  KywFree,
+  KywLoadAddr,
+  KywStoreAddr,
+
+  KywExit,
+
+  KywDumpD,
+  KywDumpC,
 
   Colon,
   Semicolon,
@@ -191,28 +197,6 @@ class IrTokenizer {
     if (view == "div")
       return IrTokenKind::KywDiv;
 
-    if (view == "dup")
-      return IrTokenKind::KywDup;
-    if (view == "exit")
-      return IrTokenKind::KywExit;
-
-    if (view == "call")
-      return IrTokenKind::KywCall;
-    if (view == "call_t")
-      return IrTokenKind::KywCallT;
-    if (view == "call_f")
-      return IrTokenKind::KywCallF;
-
-    if (view == "jmp")
-      return IrTokenKind::KywJmp;
-    if (view == "jmp_t")
-      return IrTokenKind::KywJmpT;
-    if (view == "jmp_f")
-      return IrTokenKind::KywJmpF;
-
-    if (view == "dbg_dump")
-      return IrTokenKind::KywDbgDump;
-
     if (view == "eq")
       return IrTokenKind::KywEq;
     if (view == "ne")
@@ -225,6 +209,39 @@ class IrTokenizer {
       return IrTokenKind::KywGt;
     if (view == "ge")
       return IrTokenKind::KywGe;
+
+    if (view == "jmp")
+      return IrTokenKind::KywJmp;
+    if (view == "jmp_t")
+      return IrTokenKind::KywJmpT;
+    if (view == "jmp_f")
+      return IrTokenKind::KywJmpF;
+    if (view == "call")
+      return IrTokenKind::KywCall;
+    if (view == "call_t")
+      return IrTokenKind::KywCallT;
+    if (view == "call_f")
+      return IrTokenKind::KywCallF;
+
+    if (view == "dup")
+      return IrTokenKind::KywDup;
+
+    if (view == "alloc")
+      return IrTokenKind::KywAlloc;
+    if (view == "free")
+      return IrTokenKind::KywFree;
+    if (view == "store_addr")
+      return IrTokenKind::KywStoreAddr;
+    if (view == "load_addr")
+      return IrTokenKind::KywLoadAddr;
+
+    if (view == "exit")
+      return IrTokenKind::KywExit;
+
+    if (view == "dump_d")
+      return IrTokenKind::KywDumpD;
+    if (view == "dump_c")
+      return IrTokenKind::KywDumpC;
 
     return IrTokenKind::Unknown;
   }
@@ -273,28 +290,6 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
     case IrTokenKind::KywDiv:
       return "<div>";
 
-    case IrTokenKind::KywDup:
-      return "<dup>";
-    case IrTokenKind::KywExit:
-      return "<exit>";
-
-    case IrTokenKind::KywCall:
-      return "<call>";
-    case IrTokenKind::KywCallT:
-      return "<call_t>";
-    case IrTokenKind::KywCallF:
-      return "<call_f>";
-
-    case IrTokenKind::KywJmp:
-      return "<jmp>";
-    case IrTokenKind::KywJmpT:
-      return "<jmp_t>";
-    case IrTokenKind::KywJmpF:
-      return "<jmp_f>";
-
-    case IrTokenKind::KywDbgDump:
-      return "<dbg_dump>";
-
     case IrTokenKind::KywEq:
       return "<eq>";
     case IrTokenKind::KywNe:
@@ -307,6 +302,39 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
       return "<gt>";
     case IrTokenKind::KywGe:
       return "<ge>";
+
+    case IrTokenKind::KywJmp:
+      return "<jmp>";
+    case IrTokenKind::KywJmpT:
+      return "<jmp_t>";
+    case IrTokenKind::KywJmpF:
+      return "<jmp_f>";
+    case IrTokenKind::KywCall:
+      return "<call>";
+    case IrTokenKind::KywCallT:
+      return "<call_t>";
+    case IrTokenKind::KywCallF:
+      return "<call_f>";
+
+    case IrTokenKind::KywAlloc:
+      return "<alloc>";
+    case IrTokenKind::KywFree:
+      return "<free>";
+    case IrTokenKind::KywStoreAddr:
+      return "<store_addr>";
+    case IrTokenKind::KywLoadAddr:
+      return "<load_addr>";
+
+    case IrTokenKind::KywDup:
+      return "<dup>";
+
+    case IrTokenKind::KywExit:
+      return "<exit>";
+
+    case IrTokenKind::KywDumpD:
+      return "<dump_int>";
+    case IrTokenKind::KywDumpC:
+      return "<dump_char>";
 
     case IrTokenKind::Colon:
       return "<colon>";

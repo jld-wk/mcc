@@ -5,6 +5,7 @@
 #define JLD_MCC_IR_INTERPRETER_H
 
 #include <cstdint>
+#include <cstdlib>
 #include <format>
 #include <optional>
 #include <print>
@@ -68,7 +69,7 @@ class IrInterpreter {
   }
 
  private:
-  auto expect_val(const char* name, Inst* inst, bool* con) -> int {
+  auto expect_val(const char* name, Inst* inst, bool* con, bool consume = true) -> size_t {
     if (m_stack_.empty()) {
       Diagnostics::report(Diagnostic{
           .severity = DiagnosticSeverity::Fatal,
@@ -82,7 +83,35 @@ class IrInterpreter {
       return 0;
     }
 
-    return m_stack_.top();
+    size_t a = m_stack_.top();
+    if (consume)
+      m_stack_.pop();
+    return a;
+  }
+
+  auto expect_2val(const char* name, Inst* inst, bool* con, size_t* b, bool consume = true)
+      -> size_t {
+    if (m_stack_.size() < 2) {
+      Diagnostics::report(Diagnostic{
+          .severity = DiagnosticSeverity::Fatal,
+          .range = inst->source,
+          .message = std::format("'{}' instruction expects 2 values on the stack, found {}", name,
+                                 m_stack_.size()),
+          .notes = {},
+      });
+
+      m_exit_ = true;
+      *con = false;
+      return 0;
+    }
+
+    *b = m_stack_.top();
+    m_stack_.pop();
+
+    size_t a = m_stack_.top();
+    if (consume)
+      m_stack_.pop();
+    return a;
   }
 
   auto execute_branch(Inst* inst, std::string_view branch_name, bool con = true) -> bool {
@@ -119,9 +148,9 @@ class IrInterpreter {
       return false;
     }
 
-    int b{ m_stack_.top() };
+    size_t b{ m_stack_.top() };
     m_stack_.pop();
-    int a{ m_stack_.top() };
+    size_t a{ m_stack_.top() };
     m_stack_.pop();
 
     switch (op) {
@@ -170,15 +199,11 @@ class IrInterpreter {
             [&](const PopInst&) -> bool {
               bool con{ true };
               expect_val("pop", p_inst, &con);
-              if (con)
-                m_stack_.pop();
               return con;
             },
             [&](const StoreInst& inst) -> bool {
-              bool con{ true };
-              int  val{ expect_val("pop", p_inst, &con) };
-              if (con)
-                m_stack_.pop();
+              bool   con{ true };
+              size_t val{ expect_val("store", p_inst, &con) };
               m_variables_[inst.identifier] = val;
               return con;
             },
@@ -200,68 +225,123 @@ class IrInterpreter {
               m_stack_.push(it->second);
               return true;
             },
-            [&](const DupInst&) -> bool {
-              bool con{ true };
-              int  val{ expect_val("pop", p_inst, &con) };
-              if (con)
-                m_stack_.push(val);
-              return con;
-            },
-            [&](const ExitInst&) -> bool {
-              bool con{ true };
-              int  val{ expect_val("pop", p_inst, &con) };
-              m_exit_ = true;
-              if (con)
-                m_exitCode_ = std::optional{ val };
-              return false;
-            },
-            [&](const CallInst& inst) -> bool { return execute_branch(p_inst, inst.branch); },
-            [&](const CallTInst& inst) -> bool {
-              bool con{ true };
-              int  val{ expect_val("pop", p_inst, &con) };
-              if (!con)
-                return false;
-              m_stack_.pop();
-              if (val == 0)
-                return true;
-              return execute_branch(p_inst, inst.branch);
-            },
-            [&](const CallFInst& inst) -> bool {
-              bool con{ true };
-              int  val{ expect_val("pop", p_inst, &con) };
-              if (!con)
-                return false;
-              m_stack_.pop();
-              if (val != 0)
-                return true;
-              return execute_branch(p_inst, inst.branch);
-            },
             [&](const JmpInst& inst) -> bool { return execute_branch(p_inst, inst.branch, false); },
             [&](const JmpTInst& inst) -> bool {
-              bool con{ true };
-              int  val{ expect_val("pop", p_inst, &con) };
+              bool   con{ true };
+              size_t val{ expect_val("jmp_t", p_inst, &con) };
               if (!con)
                 return false;
-              m_stack_.pop();
               if (val == 0)
                 return true;
               return execute_branch(p_inst, inst.branch, false);
             },
             [&](const JmpFInst& inst) -> bool {
-              bool con{ true };
-              int  val{ expect_val("pop", p_inst, &con) };
+              bool   con{ true };
+              size_t val{ expect_val("jmp_f", p_inst, &con) };
               if (!con)
                 return false;
-              m_stack_.pop();
               if (val != 0)
                 return true;
               return execute_branch(p_inst, inst.branch, false);
             },
-            [&](const DbgDumpInst&) -> bool {
-              bool con{ true };
-              int  val{ expect_val("pop", p_inst, &con) };
+            [&](const CallInst& inst) -> bool { return execute_branch(p_inst, inst.branch); },
+            [&](const CallTInst& inst) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("call_t", p_inst, &con) };
+              if (!con)
+                return false;
+              if (val == 0)
+                return true;
+              return execute_branch(p_inst, inst.branch);
+            },
+            [&](const CallFInst& inst) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("call_f", p_inst, &con) };
+              if (!con)
+                return false;
+              if (val != 0)
+                return true;
+              return execute_branch(p_inst, inst.branch);
+            },
+            [&](const AllocInst&) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("alloc", p_inst, &con) };
+              if (con) {
+                auto* addr = static_cast<uint8_t*>(malloc(static_cast<size_t>(val)));
+                m_stack_.push(reinterpret_cast<size_t>(addr));
+              }
+              return con;
+            },
+            [&](const FreeInst&) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("free", p_inst, &con) };
+              if (con) {
+                // NOLINTNEXTLINE
+                free(reinterpret_cast<uint8_t*>(val));
+              }
+              return con;
+            },
+            [&](const StoreAddrInst& inst) -> bool {
+              bool   con{ true };
+              size_t b{ 0 };
+              size_t a{ expect_2val("store_addr", p_inst, &con, &b) };
+              if (!con)
+                return false;
+
+              const auto it{ m_variables_.find(inst.identifier) };
+              if (it == m_variables_.end()) {
+                Diagnostics::report(Diagnostic{
+                    .severity = DiagnosticSeverity::Fatal,
+                    .range = p_inst->source,
+                    .message = std::format("variable '{}' not stored yet", inst.identifier,
+                                           m_stack_.size()),
+                    .notes = {},
+                });
+
+                m_exit_ = true;
+                return false;
+              }
+
+              // NOLINTNEXTLINE
+              *(reinterpret_cast<uint8_t*>(it->second) + a) = static_cast<uint8_t>(b);
+              return con;
+            },
+            [&](const LoadAddrInst&) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("load_addr", p_inst, &con) };
+              if (!con)
+                return false;
+              // NOLINTNEXTLINE
+              m_stack_.push(*reinterpret_cast<uint8_t*>(val));
+              return true;
+            },
+            [&](const DupInst&) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("dup", p_inst, &con, false) };
               if (con)
-                std::println("{}", val);
+                m_stack_.push(val);
+              return con;
+            },
+            [&](const ExitInst&) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("exit", p_inst, &con) };
+              m_exit_ = true;
+              if (con)
+                m_exitCode_ = std::optional{ val };
+              return false;
+            },
+            [&](const DumpDInst&) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("dump_int", p_inst, &con, false) };
+              if (con)
+                std::print("{:d}", val);
+              return con;
+            },
+            [&](const DumpCInst&) -> bool {
+              bool   con{ true };
+              size_t val{ expect_val("dump_char", p_inst, &con, false) };
+              if (con)
+                std::print("{:c}", val);
               return con;
             },
             [&](const AddInst&) -> bool { return perform_op("add", p_inst, OpKind::Add); },
@@ -286,11 +366,11 @@ class IrInterpreter {
   }
 
  private:
-  bool               m_exit_{ false };
-  std::optional<int> m_exitCode_{ std::nullopt };
+  bool                  m_exit_{ false };
+  std::optional<size_t> m_exitCode_{ std::nullopt };
 
-  std::stack<int>                               m_stack_;
-  std::unordered_map<std::string_view, int>     m_variables_;
+  std::stack<size_t>                            m_stack_;
+  std::unordered_map<std::string_view, size_t>  m_variables_;
   std::unordered_map<std::string_view, Branch*> m_branches_;
 };
 

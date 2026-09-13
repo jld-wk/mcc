@@ -104,4 +104,6 @@ print_str_impl:
 
   jmp print_str_impl
 
+  mul:const 4
+
 end_branch:

@@ -4,6 +4,7 @@
 #ifndef JLD_MCC_IR_INSTS_H
 #define JLD_MCC_IR_INSTS_H
 
+#include <cstddef>
 #include <string_view>
 #include <variant>
 #include <vector>
@@ -11,7 +12,7 @@
 #include "diagnostic/source.h"
 
 struct PushInst {
-  int number;
+  size_t number;
 };
 struct PopInst {};
 
@@ -27,9 +28,12 @@ struct SubInst {};
 struct MulInst {};
 struct DivInst {};
 
-struct DupInst {};
-struct ExitInst {};
-
+struct EqInst {};
+struct NeInst {};
+struct LtInst {};
+struct LeInst {};
+struct GtInst {};
+struct GeInst {};
 struct JmpInst {
   std::string_view branch;
 };
@@ -39,7 +43,6 @@ struct JmpTInst {
 struct JmpFInst {
   std::string_view branch;
 };
-
 struct CallInst {
   std::string_view branch;
 };
@@ -50,19 +53,25 @@ struct CallFInst {
   std::string_view branch;
 };
 
-struct DbgDumpInst {};
+struct AllocInst {};
+struct FreeInst {};
+struct StoreAddrInst {
+  std::string_view identifier;
+};
+struct LoadAddrInst {};
 
-struct EqInst {};
-struct NeInst {};
-struct LtInst {};
-struct LeInst {};
-struct GtInst {};
-struct GeInst {};
+struct DupInst {};
+
+struct ExitInst {};
+
+struct DumpDInst {};
+struct DumpCInst {};
 
 using InstVariant =
-    std::variant<PushInst, PopInst, StoreInst, LoadInst, AddInst, SubInst, MulInst, DivInst,
-                 DupInst, ExitInst, JmpInst, JmpTInst, JmpFInst, CallInst, CallTInst, CallFInst,
-                 DbgDumpInst, EqInst, NeInst, LtInst, LeInst, GtInst, GeInst>;
+    std::variant<PushInst, PopInst, StoreInst, LoadInst, AddInst, SubInst, MulInst, DivInst, EqInst,
+                 NeInst, LtInst, LeInst, GtInst, GeInst, JmpInst, JmpTInst, JmpFInst, CallInst,
+                 CallTInst, CallFInst, AllocInst, FreeInst, StoreAddrInst, LoadAddrInst, DupInst,
+                 ExitInst, DumpDInst, DumpCInst>;
 
 struct Inst {
   InstVariant variant;
