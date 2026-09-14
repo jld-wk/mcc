@@ -1,32 +1,32 @@
 ; SPDX-FileCopyrightText: (c) 2026 Julian Duwe
 ; SPDX-License-Identifier: Apache-2.0
 
-entry:
+entry (void):
 -
-store 6, n
-call factorial
-dump_d result
+  store 6, [arg:0]
+  call factorial
+  dump_d [ret:0]
 
-store 10, new_line_c
-dump_c new_line_c
-
-exit 0
--
-
-factorial:
--
-store n, result
-jmp factorial_cond
+  store 10, [new_line_c]
+  dump_c [new_line_c]
+  
+  exit 0
 -
 
-factorial_cond:
+factorial (n):
 -
-sub n, 1, n
-jmp_if n, 0, ne, factorial_impl
--
+store [n], [result]
+jmp cond
 
-factorial_impl:
--
-mul result, n, result
-jmp factorial_cond
+cond:
+  sub [n], 1, [n]
+  jmp_if [n], 0, ne, body
+end
+
+body:
+  mul [n], [result], [result]
+  jmp cond
+end
+
+ret [result]
 -

@@ -7,29 +7,30 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
 #include "diagnostic/source.h"
 
-using InstParameter = std::variant<std::string_view, size_t>;
-
-enum class StoreInstKind : uint8_t { Local, Ret, Param };
-
-struct StoreInst {
-  StoreInstKind kind;
-
-  InstParameter    a;
-  std::string_view toVar;
+enum class IrSlotKind : uint8_t {
+  Local,
+  Global,
+  Register,
+  Return,
+  Argument,
 };
 
-enum class LoadInstKind : uint8_t { Local, Ret, Param };
+struct IrSlot {
+  IrSlotKind       kind{ IrSlotKind::Local };
+  std::string_view identifier;
+};
 
-struct LoadInst {
-  LoadInstKind kind;
+using InstParameter = std::variant<IrSlot, size_t>;
 
-  std::string_view a;
-  std::string_view toVar;
+struct StoreInst {
+  InstParameter p1;
+  IrSlot        slot;
 };
 
 enum class ArithmeticInstKind : uint8_t {
@@ -42,9 +43,9 @@ enum class ArithmeticInstKind : uint8_t {
 struct ArithmeticInst {
   ArithmeticInstKind kind;
 
-  InstParameter    a;
-  InstParameter    b;
-  std::string_view toVar;
+  InstParameter p1;
+  InstParameter p2;
+  IrSlot        slot;
 };
 
 enum class ComparisionInstKind : uint8_t { Eq, Ne, Lt, Le, Gt, Ge };
@@ -52,9 +53,9 @@ enum class ComparisionInstKind : uint8_t { Eq, Ne, Lt, Le, Gt, Ge };
 struct ComparisionInst {
   ComparisionInstKind kind;
 
-  InstParameter    a;
-  InstParameter    b;
-  std::string_view toVar;
+  InstParameter p1;
+  InstParameter p2;
+  IrSlot        slot;
 };
 
 enum class BranchInstKind : uint8_t { Jmp, Call };
@@ -62,45 +63,48 @@ enum class BranchInstKind : uint8_t { Jmp, Call };
 struct BranchInst {
   BranchInstKind kind;
 
-  std::string_view toBranch;
+  std::string_view branch;
 };
 
 struct BranchIfInst {
   BranchInstKind kind;
 
-  InstParameter       a;
-  InstParameter       b;
-  ComparisionInstKind cmpKind;
-  std::string_view    toBranch;
+  InstParameter       p1;
+  InstParameter       p2;
+  ComparisionInstKind p3;
+  std::string_view    branch;
 };
 
 struct AllocInst {
-  InstParameter    a;
-  std::string_view toVar;
+  InstParameter p1;
+  IrSlot        slot;
 };
 
 struct FreeInst {
-  std::string_view identifier;
+  IrSlot p1;
 };
 
 struct LoadAddrInst {
-  std::string_view a;
-  std::string_view toVar;
+  IrSlot p1;
+  IrSlot slot;
 };
 
 struct StorePtrInst {
-  InstParameter    a;
-  InstParameter    b;
-  std::string_view toVar;
+  InstParameter p1;
+  InstParameter p2;
+  IrSlot        slot;
 };
 
 struct StoreAddrInst {
-  std::string_view a;
-  std::string_view toVar;
+  IrSlot p1;
+  IrSlot slot;
 };
 
+struct RetInst {
+  std::vector<InstParameter> params;
+};
 struct ExitInst {
-  InstParameter a;
+  InstParameter p1;
 };
 
 enum class DumpInstKind : uint8_t { Decimal, Char };
@@ -108,22 +112,30 @@ enum class DumpInstKind : uint8_t { Decimal, Char };
 struct DumpInst {
   DumpInstKind kind;
 
-  InstParameter a;
+  InstParameter p1;
 };
 
-using InstVariant = std::variant<StoreInst, LoadInst, ArithmeticInst, ComparisionInst, BranchInst,
-                                 BranchIfInst, AllocInst, FreeInst, LoadAddrInst, StorePtrInst,
-                                 StoreAddrInst, ExitInst, DumpInst>;
+using IrInstVariant =
+    std::variant<StoreInst, ArithmeticInst, ComparisionInst, BranchInst, BranchIfInst, AllocInst,
+                 FreeInst, LoadAddrInst, StorePtrInst, StoreAddrInst, RetInst, ExitInst, DumpInst>;
 
-struct Inst {
-  InstVariant variant;
-  SourceRange source;
+struct IrInst {
+  IrInstVariant variant;
+  SourceRange   source;
 };
 
-struct Branch {
-  std::vector<Inst*> insts;
-  std::string_view   identifier;
-  SourceRange        range;
+struct IrBranch {
+  std::vector<IrInst*> insts;
+  std::string_view     identifier;
+  SourceRange          range;
+};
+
+struct IrFunction {
+  std::vector<IrInst*>                            insts;
+  std::unordered_map<std::string_view, IrBranch*> branches;
+  std::vector<std::string_view>                   params;
+  std::string_view                                identifier;
+  SourceRange                                     range;
 };
 
 #endif  // JLD_MCC_IR_INSTS_H

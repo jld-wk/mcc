@@ -8,6 +8,8 @@
 #include <charconv>
 #include <cstddef>
 #include <string_view>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "arena.h"
@@ -23,41 +25,78 @@ class IrSyntaxer {
 
   // TODO(jld-wk): don't actually need an vector, just use the arena directly, BUT remind me when
   // the token arena is done...
-  [[nodiscard]] auto build() -> std::vector<Branch*> {
-    std::vector<Branch*> branches;
+  [[nodiscard]] auto build() -> std::vector<IrFunction*> {
+    std::vector<IrFunction*> functions;
     while (current().kind != IrTokenKind::EndOfFile) {
-      Branch* branch{ build_branch() };
-      assert(branch != nullptr);
-      branches.push_back(branch);
+      IrFunction* function{ build_function() };
+      assert(function != nullptr);
+      functions.push_back(function);
     }
-    return branches;
+    return functions;
   }
 
  private:
-  [[nodiscard]] auto build_number(bool* ok) -> size_t {
-    const IrToken& cur{ current() };
-    if (!expect(IrTokenKind::Number)) {
-      *ok = false;
-      return 0;
-    }
-
-    std::string_view view{ cur.text };
-    size_t           number{ 0 };
-    std::from_chars(view.data(), view.data() + view.length(), number);
-    return number;
-  }
-
-  [[nodiscard]] auto build_inst_paramter(bool* ok) -> InstParameter {
+  [[nodiscard]] auto build_number(size_t* number, bool expected = true) -> bool {
     const IrToken& cur{ current() };
     if (match(IrTokenKind::Number)) {
       std::string_view view{ cur.text };
-      size_t           number{ 0 };
-      std::from_chars(view.data(), view.data() + view.length(), number);
-      return number;
+      std::from_chars(view.data(), view.data() + view.length(), *number);
+      return true;
     }
 
-    *ok = expect(IrTokenKind::Identifier);
-    return cur.text;
+    if (expected)
+      expect(IrTokenKind::Number);
+    return false;
+  }
+
+  [[nodiscard]] auto build_slot(IrSlot* slot, bool expected = true) -> bool {
+    const IrToken& cur{ current() };
+    if (match(IrTokenKind::Slot)) {
+      std::string_view view{ cur.text.substr(1, cur.text.length() - 2) };
+
+      size_t n = 0;
+      while (view.length() > n && view[n] != ':') ++n;
+
+      std::string_view type{ view.substr(0, n) };
+      std::string_view identifier{ n == view.length() ? view : view.substr(n + 1, view.length()) };
+
+      IrSlotKind kind = IrSlotKind::Local;
+      if (type == "r")
+        kind = IrSlotKind::Register;
+      else if (type == "g")
+        kind = IrSlotKind::Global;
+      else if (type == "arg")
+        kind = IrSlotKind::Argument;
+      else if (type == "ret")
+        kind = IrSlotKind::Return;
+      else if (n != view.length()) {
+        assert(false);
+        // TODO(jld-wk): unknown type -> error
+      }
+
+      *slot = IrSlot{
+        .kind = kind,
+        .identifier = identifier,
+      };
+      return true;
+    }
+
+    if (expected)
+      expect(IrTokenKind::Slot);
+    return false;
+  }
+
+  [[nodiscard]] auto build_inst_paramter(InstParameter* param) -> bool {
+    size_t number{ 0 };
+    if (build_number(&number, false)) {
+      *param = number;
+      return true;
+    }
+
+    IrSlot slot;
+    bool   ok = build_slot(&slot, true);
+    *param = slot;
+    return ok;
   }
 
   [[nodiscard]] auto comparision_kind(IrTokenKind kind) -> ComparisionInstKind {
@@ -69,187 +108,210 @@ class IrSyntaxer {
                                         : ComparisionInstKind::Ge;
   }
 
-  [[nodiscard]] auto build_inst() -> Inst* {
+  [[nodiscard]] auto build_inst() -> IrInst* {
     const IrToken& start{ current() };
 
-    if (match(IrTokenKind::KywStore) || match(IrTokenKind::KywStoreRet) ||
-        match(IrTokenKind::KywStoreParam)) {
-      bool          ok = true;
-      InstParameter a = build_inst_paramter(&ok);
+    if (match(IrTokenKind::KywStore)) {
+      InstParameter p1;
+      bool          _ = build_inst_paramter(&p1);
       expect(IrTokenKind::Comma);
 
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
+      IrSlot slot;
+      bool   idk_unused = build_slot(&slot);
+      _ = idk_unused;
+      const IrToken& end{ previous() };
 
-      StoreInstKind kind = start.kind == IrTokenKind::KywStore      ? StoreInstKind::Local
-                           : start.kind == IrTokenKind::KywStoreRet ? StoreInstKind::Ret
-                                                                    : StoreInstKind::Param;
-      return m_insts_.emplace(StoreInst{ .kind = kind, .a = a, .toVar = end.text },
-                              source_range_from(start.source, end.source));
-    }
-
-    if (match(IrTokenKind::KywLoad) || match(IrTokenKind::KywLoadRet) ||
-        match(IrTokenKind::KywLoadParam)) {
-      const IrToken& a{ current() };
-      expect(IrTokenKind::Identifier);
-      expect(IrTokenKind::Comma);
-
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
-
-      LoadInstKind kind = start.kind == IrTokenKind::KywLoad      ? LoadInstKind::Local
-                          : start.kind == IrTokenKind::KywLoadRet ? LoadInstKind::Ret
-                                                                  : LoadInstKind::Param;
-      return m_insts_.emplace(LoadInst{ .kind = kind, .a = a.text, .toVar = end.text },
+      return m_insts_.emplace(StoreInst{ .p1 = p1, .slot = slot },
                               source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywAdd) || match(IrTokenKind::KywSub) || match(IrTokenKind::KywMul) ||
         match(IrTokenKind::KywDiv)) {
-      bool          ok = true;
-      InstParameter a = build_inst_paramter(&ok);
+      InstParameter p1;
+      bool          _ = build_inst_paramter(&p1);
+
       expect(IrTokenKind::Comma);
-      InstParameter b = build_inst_paramter(&ok);
+      InstParameter p2;
+      bool          idk_unused = build_inst_paramter(&p2);
+      _ = idk_unused;
       expect(IrTokenKind::Comma);
 
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
+      IrSlot slot;
+      bool   well_obv_unused = build_slot(&slot);
+      idk_unused = well_obv_unused;
+      const IrToken& end{ previous() };
 
       ArithmeticInstKind kind = start.kind == IrTokenKind::KywAdd   ? ArithmeticInstKind::Add
                                 : start.kind == IrTokenKind::KywSub ? ArithmeticInstKind::Sub
                                 : start.kind == IrTokenKind::KywMul ? ArithmeticInstKind::Mul
                                                                     : ArithmeticInstKind::Div;
-      return m_insts_.emplace(ArithmeticInst{ .kind = kind, .a = a, .b = b, .toVar = end.text },
+      return m_insts_.emplace(ArithmeticInst{ .kind = kind, .p1 = p1, .p2 = p2, .slot = slot },
                               source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywEq) || match(IrTokenKind::KywNe) || match(IrTokenKind::KywLt) ||
         match(IrTokenKind::KywLe) || match(IrTokenKind::KywGt) || match(IrTokenKind::KywGe)) {
-      bool          ok = true;
-      InstParameter a = build_inst_paramter(&ok);
+      InstParameter p1;
+      bool          _ = build_inst_paramter(&p1);
+
       expect(IrTokenKind::Comma);
-      InstParameter b = build_inst_paramter(&ok);
+      InstParameter p2;
+      bool          idk_unused = build_inst_paramter(&p2);
+      _ = idk_unused;
       expect(IrTokenKind::Comma);
 
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
+      IrSlot slot;
+      bool   well_obv_unused = build_slot(&slot);
+      idk_unused = well_obv_unused;
+      const IrToken& end{ previous() };
 
       return m_insts_.emplace(
-          ComparisionInst{
-              .kind = comparision_kind(start.kind), .a = a, .b = b, .toVar = end.text },
+          ComparisionInst{ .kind = comparision_kind(start.kind), .p1 = p1, .p2 = p2, .slot = slot },
           source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywJmp) || match(IrTokenKind::KywCall)) {
-      const IrToken& end{ current() };
       expect(IrTokenKind::Identifier);
+      const IrToken& end{ previous() };
 
       return m_insts_.emplace(
           BranchInst{ .kind = start.kind == IrTokenKind::KywJmp ? BranchInstKind::Jmp
                                                                 : BranchInstKind::Call,
-                      .toBranch = end.text },
+                      .branch = end.text },
           source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywJmpIf) || match(IrTokenKind::KywCallIf)) {
-      bool          ok = true;
-      InstParameter a = build_inst_paramter(&ok);
-      expect(IrTokenKind::Comma);
-      InstParameter b = build_inst_paramter(&ok);
+      InstParameter p1;
+      bool          _ = build_inst_paramter(&p1);
 
       expect(IrTokenKind::Comma);
-      ComparisionInstKind cmp_kind = comparision_kind(advance().kind);
+      InstParameter p2;
+      bool          idk_unused = build_inst_paramter(&p2);
+      _ = idk_unused;
       expect(IrTokenKind::Comma);
 
-      const IrToken& end{ current() };
+      ComparisionInstKind p3 = comparision_kind(advance().kind);
+      expect(IrTokenKind::Comma);
+
       expect(IrTokenKind::Identifier);
+      const IrToken& end{ previous() };
 
       return m_insts_.emplace(
           BranchIfInst{ .kind = start.kind == IrTokenKind::KywJmpIf ? BranchInstKind::Jmp
                                                                     : BranchInstKind::Call,
-                        .a = a,
-                        .b = b,
-                        .cmpKind = cmp_kind,
-                        .toBranch = end.text },
+                        .p1 = p1,
+                        .p2 = p2,
+                        .p3 = p3,
+                        .branch = end.text },
           source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywAlloc)) {
-      bool          ok = true;
-      InstParameter a = build_inst_paramter(&ok);
+      InstParameter p1;
+      bool          _ = build_inst_paramter(&p1);
       expect(IrTokenKind::Comma);
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
 
-      return m_insts_.emplace(AllocInst{ .a = a, .toVar = end.text },
+      IrSlot slot;
+      bool   idk_unused = build_slot(&slot);
+      _ = idk_unused;
+      const IrToken& end{ previous() };
+
+      return m_insts_.emplace(AllocInst{ .p1 = p1, .slot = slot },
                               source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywFree)) {
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
-      return m_insts_.emplace(FreeInst{ .identifier = end.text },
-                              source_range_from(start.source, end.source));
+      IrSlot         p1;
+      bool           _ = build_slot(&p1);
+      const IrToken& end{ previous() };
+
+      return m_insts_.emplace(FreeInst{ .p1 = p1 }, source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywLoadAddr)) {
-      const IrToken& a{ current() };
-      expect(IrTokenKind::Identifier);
+      IrSlot p1;
+      bool   _ = build_slot(&p1);
       expect(IrTokenKind::Comma);
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
 
-      return m_insts_.emplace(LoadAddrInst{ .a = a.text, .toVar = end.text },
+      IrSlot slot;
+      bool   idk_unused = build_slot(&slot);
+      _ = idk_unused;
+      const IrToken& end{ previous() };
+
+      return m_insts_.emplace(LoadAddrInst{ .p1 = p1, .slot = slot },
                               source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywStorePtr)) {
-      bool          ok = true;
-      InstParameter a = build_inst_paramter(&ok);
-      expect(IrTokenKind::Comma);
-      InstParameter b = build_inst_paramter(&ok);
+      InstParameter p1;
+      bool          _ = build_inst_paramter(&p1);
       expect(IrTokenKind::Comma);
 
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
+      InstParameter p2;
+      bool          idk_unused = build_inst_paramter(&p2);
+      _ = idk_unused;
+      expect(IrTokenKind::Comma);
 
-      return m_insts_.emplace(StorePtrInst{ .a = a, .b = b, .toVar = end.text },
+      IrSlot slot;
+      bool   well_obv_unused = build_slot(&slot);
+      idk_unused = well_obv_unused;
+      const IrToken& end{ previous() };
+
+      return m_insts_.emplace(StorePtrInst{ .p1 = p1, .p2 = p2, .slot = slot },
                               source_range_from(start.source, end.source));
     }
 
     if (match(IrTokenKind::KywStoreAddr)) {
-      const IrToken& a{ current() };
-      expect(IrTokenKind::Identifier);
+      IrSlot p1;
+      bool   _ = build_slot(&p1);
       expect(IrTokenKind::Comma);
-      const IrToken& end{ current() };
-      expect(IrTokenKind::Identifier);
 
-      return m_insts_.emplace(StoreAddrInst{ .a = a.text, .toVar = end.text },
+      IrSlot slot;
+      bool   idk_unused = build_slot(&slot);
+      _ = idk_unused;
+      const IrToken& end{ previous() };
+
+      return m_insts_.emplace(LoadAddrInst{ .p1 = p1, .slot = slot },
                               source_range_from(start.source, end.source));
     }
 
+    if (match(IrTokenKind::KywRet)) {
+      std::vector<InstParameter> params;
+      if (!match(IrTokenKind::KywVoid)) {
+        do {
+          InstParameter param;
+          bool          _ = build_inst_paramter(&param);
+          params.push_back(param);
+        } while (match(IrTokenKind::Comma) && !peek(IrTokenKind::EndOfFile));
+      } else {
+        // errorrrrr
+      }
+      return m_insts_.emplace(RetInst{ .params = std::move(params) }, start.source);
+    }
+
     if (match(IrTokenKind::KywExit)) {
-      bool          ok = true;
-      InstParameter a = build_inst_paramter(&ok);
-      return m_insts_.emplace(ExitInst{ .a = a }, start.source);
+      InstParameter p1;
+      bool          _ = build_inst_paramter(&p1);
+      return m_insts_.emplace(ExitInst{ .p1 = p1 }, start.source);
     }
 
     if (match(IrTokenKind::KywDumpD) || match(IrTokenKind::KywDumpC)) {
-      bool          ok = true;
-      InstParameter a = build_inst_paramter(&ok);
-
+      InstParameter p1;
+      bool          _ = build_inst_paramter(&p1);
       return m_insts_.emplace(
           DumpInst{ .kind = start.kind == IrTokenKind::KywDumpD ? DumpInstKind::Decimal
                                                                 : DumpInstKind::Char,
-                    .a = a },
+                    .p1 = p1 },
           start.source);
     }
 
+    assert(false);
     // TODO(jld-wk): print diagnostic
     return nullptr;
   }
 
-  [[nodiscard]] auto build_branch() -> Branch* {
+  [[nodiscard]] auto build_branch() -> IrBranch* {
     const IrToken& start{ current() };
     if (!expect(IrTokenKind::Identifier)) {
       // TODO(jld-wk): recovery stuff!!
@@ -258,16 +320,67 @@ class IrSyntaxer {
       // same thing... again..
     }
 
-    bool _ = match(IrTokenKind::Minus);
-
-    std::vector<Inst*> insts;
-    while (!peek(IrTokenKind::Minus) && !peek(IrTokenKind::EndOfFile)) {
-      Inst* inst = build_inst();
+    std::vector<IrInst*> insts;
+    while (!peek(IrTokenKind::KywEnd) && !peek(IrTokenKind::EndOfFile)) {
+      IrInst* inst = build_inst();
       insts.push_back(inst);
     }
 
-    const IrToken& end{ advance() };
+    expect(IrTokenKind::KywEnd);
+    const IrToken& end{ previous() };
+
     return m_branches_.emplace(insts, start.text, source_range_from(start.source, end.source));
+  }
+
+  [[nodiscard]] auto build_function() -> IrFunction* {
+    const IrToken& start{ current() };
+    if (!expect(IrTokenKind::Identifier)) {
+      // TODO(jld-wk): recovery stuff!!
+    }
+    if (!expect(IrTokenKind::OpenParen)) {
+      // same thing... again..
+    }
+
+    std::vector<std::string_view> params;
+    if (peek(IrTokenKind::Identifier)) {
+      do {
+        const IrToken& cur = current();
+        expect(IrTokenKind::Identifier);
+        params.push_back(cur.text);
+      } while (match(IrTokenKind::Comma) && !peek(IrTokenKind::EndOfFile));
+    } else if (!expect(IrTokenKind::KywVoid)) {
+      // same thing... again..
+    }
+
+    if (!expect(IrTokenKind::CloseParen)) {
+      // same thing... again..
+    }
+    if (!expect(IrTokenKind::Colon)) {
+      // same thing... again..
+    }
+    if (!expect(IrTokenKind::Minus)) {
+      // same thing... again..
+    }
+
+    std::vector<IrInst*>                            insts;
+    std::unordered_map<std::string_view, IrBranch*> branches;
+
+    while (!peek(IrTokenKind::Minus) && !peek(IrTokenKind::EndOfFile)) {
+      if (peek(IrTokenKind::Identifier)) {
+        IrBranch* branch = build_branch();
+        branches[branch->identifier] = branch;
+        continue;
+      }
+
+      IrInst* inst = build_inst();
+      insts.push_back(inst);
+    }
+
+    const IrToken& end{ current() };
+    expect(IrTokenKind::Minus);
+
+    return m_functions_.emplace(insts, branches, params, start.text,
+                                source_range_from(start.source, end.source));
   }
 
   JLD_MCC_FORCE_INLINE [[nodiscard]] auto current() -> const IrToken& {
@@ -311,8 +424,9 @@ class IrSyntaxer {
   }
 
  private:
-  Arena<Inst>   m_insts_;
-  Arena<Branch> m_branches_;
+  Arena<IrInst>     m_insts_;
+  Arena<IrBranch>   m_branches_;
+  Arena<IrFunction> m_functions_;
 
   const std::vector<IrToken>& m_tokens_;
   size_t                      m_curToken_{ 0 };

@@ -4,6 +4,7 @@
 #ifndef JLD_MCC_IR_TOKENIZER_H
 #define JLD_MCC_IR_TOKENIZER_H
 
+#include <cassert>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -16,14 +17,10 @@
 enum class IrTokenKind : uint8_t {
   Number,
   Identifier,
+  Slot,
 
   KywLoad,
-  KywLoadRet,
-  KywLoadParam,
-
   KywStore,
-  KywStoreRet,
-  KywStoreParam,
 
   KywAdd,
   KywSub,
@@ -48,8 +45,12 @@ enum class IrTokenKind : uint8_t {
   KywStorePtr,
   KywStoreAddr,
 
+  KywArg,
+  KywRet,
+  KywEnd,
+  KywVoid,
+
   KywExit,
-  KywStack,
 
   KywDumpD,
   KywDumpC,
@@ -57,6 +58,9 @@ enum class IrTokenKind : uint8_t {
   Colon,
   Comma,
   Minus,
+
+  OpenParen,
+  CloseParen,
 
   Unknown,
   EndOfFile
@@ -135,19 +139,42 @@ class IrTokenizer {
         continue;
       }
 
-      // TODO(jld-wk): Not sure, if that even has a reason to exist, maybe temporaries stored
-      // directly into registers?
+      if (c == '(') {
+        push_token(IrTokenKind::OpenParen);
+        continue;
+      }
+
+      if (c == ')') {
+        push_token(IrTokenKind::CloseParen);
+        continue;
+      }
+
+      // TODO(jld-wk): store 0, [r:rax], so you can then basically bypass
+      // the register allocation and also then for globals, store 0, [g:my_literal]
       if (c == '[') {
-        iterate();
-        if (*m_sourceIt_ != 's') {
-          // invalid
+        while (is_identifier(*m_sourceIt_)) iterate();
+
+        if (*m_sourceIt_ == ']') {
+          iterate();
+          push_token(IrTokenKind::Slot);
+          continue;
         }
-        iterate();
-        if (*m_sourceIt_ != ']') {
+
+        if (*m_sourceIt_ != ':') {
+          assert(false);
           // TODO(jld-wk): print diagnostic
         }
 
-        push_token(IrTokenKind::KywStack);
+        iterate();
+
+        while (is_identifier(*m_sourceIt_)) iterate();
+        if (*m_sourceIt_ != ']') {
+          assert(false);
+          // TODO(jld-wk): print diagnostic
+        }
+
+        iterate();
+        push_token(IrTokenKind::Slot);
         continue;
       }
 
@@ -207,17 +234,8 @@ class IrTokenizer {
   auto keyword_kind(std::string_view view) -> IrTokenKind {
     if (view == "load")
       return IrTokenKind::KywLoad;
-    if (view == "load_ret")
-      return IrTokenKind::KywLoadRet;
-    if (view == "load_param")
-      return IrTokenKind::KywLoadParam;
-
     if (view == "store")
       return IrTokenKind::KywStore;
-    if (view == "store_ret")
-      return IrTokenKind::KywStoreRet;
-    if (view == "store_param")
-      return IrTokenKind::KywStoreParam;
 
     if (view == "add")
       return IrTokenKind::KywAdd;
@@ -263,6 +281,16 @@ class IrTokenizer {
 
     if (view == "exit")
       return IrTokenKind::KywExit;
+    if (view == "void")
+      return IrTokenKind::KywVoid;
+
+    if (view == "end")
+      return IrTokenKind::KywEnd;
+
+    if (view == "ret")
+      return IrTokenKind::KywRet;
+    if (view == "arg")
+      return IrTokenKind::KywArg;
 
     if (view == "dump_d")
       return IrTokenKind::KywDumpD;
@@ -296,20 +324,13 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
       return "<number>";
     case IrTokenKind::Identifier:
       return "<identifier>";
+    case IrTokenKind::Slot:
+      return "<slot>";
 
     case IrTokenKind::KywLoad:
       return "<load>";
-    case IrTokenKind::KywLoadRet:
-      return "<load_ret>";
-    case IrTokenKind::KywLoadParam:
-      return "<load_param>";
-
     case IrTokenKind::KywStore:
       return "<store>";
-    case IrTokenKind::KywStoreRet:
-      return "<store_ret>";
-    case IrTokenKind::KywStoreParam:
-      return "<store_param>";
 
     case IrTokenKind::KywAdd:
       return "<add>";
@@ -353,8 +374,15 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
     case IrTokenKind::KywStoreAddr:
       return "<store_addr>";
 
-    case IrTokenKind::KywStack:
-      return "<stack-top>";
+    case IrTokenKind::KywArg:
+      return "<arg>";
+    case IrTokenKind::KywRet:
+      return "<ret>";
+
+    case IrTokenKind::KywEnd:
+      return "<end>";
+    case IrTokenKind::KywVoid:
+      return "<void>";
 
     case IrTokenKind::KywExit:
       return "<exit>";
@@ -370,6 +398,10 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
       return "<comma>";
     case IrTokenKind::Minus:
       return "<minus>";
+    case IrTokenKind::OpenParen:
+      return "<open-paren>";
+    case IrTokenKind::CloseParen:
+      return "<close-paren>";
 
     case IrTokenKind::Unknown:
       return "<unknown>";
