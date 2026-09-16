@@ -1,0 +1,60 @@
+; SPDX-FileCopyrightText: (c) 2026 Julian Duwe
+; SPDX-License-Identifier: Apache-2.0
+
+entry (void):
+  store 6 -> [arg:0]
+  call alloc_char_ptr
+  store [ret:0] -> [str_1]
+
+  ; But whos gonna stop me from calling it str?
+  store_at 'H' -> [str_1] 0
+  store_at 'e' -> [str_1] 1
+  store_at 'l' -> [str_1] 2
+  store_at 'l' -> [str_1] 3
+  store_at 'o' -> [str_1] 4
+  store_at '!' -> [str_1] 5
+
+  store 3 -> [arg:0]
+  call alloc_char_ptr
+  store [ret:0] -> [str_2]
+
+  store_at '\n' -> [str_2] 0
+  store_at '?'  -> [str_2] 1
+  store_at '\n' -> [str_2] 2
+
+  store [str_1] -> [arg:0]
+  call print_char_ptr
+
+  store [str_2] -> [arg:0]
+  call print_char_ptr
+
+  free [str_1]
+  free [str_2]
+
+  exit 0
+end
+
+; Yes, it is not a string!
+alloc_char_ptr (len: int):
+  add [len] 1 -> [n_len]
+  alloc [n_len] -> [ptr]
+  store_at 0 -> [ptr] [len]
+
+  ret [ptr]
+end
+
+print_char_ptr (ptr: char*):
+  c: char
+  jmp cond
+
+  .cond:
+    load_addr [ptr] -> [c]
+    jmp_if [c] ne 0 -> loop
+
+  .loop:
+    dump [c]
+    add [ptr] 1 -> [ptr]
+    jmp cond
+
+  ret void
+end

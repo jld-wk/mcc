@@ -15,9 +15,10 @@
 #include "diagnostic/source.h"
 
 enum class IrTokenKind : uint8_t {
-  Number,
-  Identifier,
+  Char,
   Slot,
+  Integer,
+  Identifier,
 
   KywLoad,
   KywStore,
@@ -42,22 +43,26 @@ enum class IrTokenKind : uint8_t {
   KywAlloc,
   KywFree,
   KywLoadAddr,
-  KywStorePtr,
+  KywStoreAt,
   KywStoreAddr,
 
   KywArg,
   KywRet,
   KywEnd,
-  KywVoid,
 
   KywExit,
+  KywDump,
 
-  KywDumpD,
-  KywDumpC,
+  KywChar,
+  KywVoid,
+  KywInt,
 
+  Dot,
+  Star,
   Colon,
   Comma,
   Minus,
+  Arrow,
 
   OpenParen,
   CloseParen,
@@ -120,7 +125,7 @@ class IrTokenizer {
 
       if (std::isdigit(c)) {
         while (is_identifier(*m_sourceIt_)) iterate();
-        push_token(IrTokenKind::Number);
+        push_token(IrTokenKind::Integer);
         continue;
       }
 
@@ -134,7 +139,23 @@ class IrTokenizer {
         continue;
       }
 
+      if (c == '.') {
+        push_token(IrTokenKind::Dot);
+        continue;
+      }
+
+      if (c == '*') {
+        push_token(IrTokenKind::Star);
+        continue;
+      }
+
       if (c == '-') {
+        if (*m_sourceIt_ == '>') {
+          iterate();
+          push_token(IrTokenKind::Arrow);
+          continue;
+        }
+
         push_token(IrTokenKind::Minus);
         continue;
       }
@@ -149,14 +170,51 @@ class IrTokenizer {
         continue;
       }
 
+      if (c == '\'') {
+        iterate();
+        ++m_startIterated_;
+        std::string_view literal = str_view();
+
+        switch (*m_sourceIt_) {
+          case 'n':
+            literal = std::string_view("\n");
+            iterate();
+            break;
+          case 'r':
+            literal = std::string_view("\r");
+            iterate();
+            break;
+          case 't':
+            literal = std::string_view("\t");
+            iterate();
+            break;
+          case '\\':
+            literal = std::string_view("\\");
+            iterate();
+            break;
+          default:
+            break;
+        }
+
+        if (*m_sourceIt_ != '\'') {
+          assert(false);
+          // TODO(jld-wk): print diagnostic
+        }
+
+        iterate();
+        push_char_token(IrTokenKind::Char, literal);
+        continue;
+      }
+
       // TODO(jld-wk): store 0, [r:rax], so you can then basically bypass
       // the register allocation and also then for globals, store 0, [g:my_literal]
       if (c == '[') {
         while (is_identifier(*m_sourceIt_)) iterate();
 
         if (*m_sourceIt_ == ']') {
-          iterate();
+          ++m_startIterated_;
           push_token(IrTokenKind::Slot);
+          iterate();
           continue;
         }
 
@@ -173,8 +231,9 @@ class IrTokenizer {
           // TODO(jld-wk): print diagnostic
         }
 
-        iterate();
+        ++m_startIterated_;
         push_token(IrTokenKind::Slot);
+        iterate();
         continue;
       }
 
@@ -199,6 +258,21 @@ class IrTokenizer {
   auto str_view() -> std::string_view {
     size_t size = m_iterated_ - m_startIterated_;
     return std::string_view{ m_source_.data() + m_startIterated_, size };
+  }
+
+  void push_char_token(IrTokenKind kind, std::string_view literal) {
+    m_tokens_.push_back(IrToken{
+        .kind = kind,
+        .source =
+            SourceRange{
+                .file = m_file_,
+                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
+                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
+                .beginIt = m_startIterated_,
+                .endIt = m_iterated_,
+            },
+        .text = literal,
+    });
   }
 
   void push_token(IrTokenKind kind) {
@@ -276,26 +350,27 @@ class IrTokenizer {
       return IrTokenKind::KywLoadAddr;
     if (view == "store_addr")
       return IrTokenKind::KywStoreAddr;
-    if (view == "store_ptr")
-      return IrTokenKind::KywStorePtr;
+    if (view == "store_at")
+      return IrTokenKind::KywStoreAt;
 
     if (view == "exit")
       return IrTokenKind::KywExit;
-    if (view == "void")
-      return IrTokenKind::KywVoid;
+    if (view == "dump")
+      return IrTokenKind::KywDump;
 
     if (view == "end")
       return IrTokenKind::KywEnd;
-
     if (view == "ret")
       return IrTokenKind::KywRet;
     if (view == "arg")
       return IrTokenKind::KywArg;
 
-    if (view == "dump_d")
-      return IrTokenKind::KywDumpD;
-    if (view == "dump_c")
-      return IrTokenKind::KywDumpC;
+    if (view == "int")
+      return IrTokenKind::KywInt;
+    if (view == "char")
+      return IrTokenKind::KywChar;
+    if (view == "void")
+      return IrTokenKind::KywVoid;
 
     return IrTokenKind::Unknown;
   }
@@ -320,12 +395,14 @@ class IrTokenizer {
 
 auto format_ir_token_kind(IrTokenKind kind) -> const char* {
   switch (kind) {
-    case IrTokenKind::Number:
+    case IrTokenKind::Char:
+      return "<char>";
+    case IrTokenKind::Integer:
       return "<number>";
-    case IrTokenKind::Identifier:
-      return "<identifier>";
     case IrTokenKind::Slot:
       return "<slot>";
+    case IrTokenKind::Identifier:
+      return "<identifier>";
 
     case IrTokenKind::KywLoad:
       return "<load>";
@@ -369,7 +446,7 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
       return "<free>";
     case IrTokenKind::KywLoadAddr:
       return "<load_addr>";
-    case IrTokenKind::KywStorePtr:
+    case IrTokenKind::KywStoreAt:
       return "<store_ptr>";
     case IrTokenKind::KywStoreAddr:
       return "<store_addr>";
@@ -378,26 +455,33 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
       return "<arg>";
     case IrTokenKind::KywRet:
       return "<ret>";
-
     case IrTokenKind::KywEnd:
       return "<end>";
-    case IrTokenKind::KywVoid:
-      return "<void>";
 
     case IrTokenKind::KywExit:
       return "<exit>";
+    case IrTokenKind::KywDump:
+      return "<dump>";
 
-    case IrTokenKind::KywDumpD:
-      return "<dump_int>";
-    case IrTokenKind::KywDumpC:
-      return "<dump_char>";
+    case IrTokenKind::KywChar:
+      return "<char>";
+    case IrTokenKind::KywInt:
+      return "<int>";
+    case IrTokenKind::KywVoid:
+      return "<void>";
 
+    case IrTokenKind::Dot:
+      return "<dot>";
+    case IrTokenKind::Star:
+      return "<star>";
     case IrTokenKind::Colon:
       return "<colon>";
     case IrTokenKind::Comma:
       return "<comma>";
     case IrTokenKind::Minus:
       return "<minus>";
+    case IrTokenKind::Arrow:
+      return "<arrow>";
     case IrTokenKind::OpenParen:
       return "<open-paren>";
     case IrTokenKind::CloseParen:

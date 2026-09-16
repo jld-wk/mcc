@@ -9,6 +9,7 @@
 
 enum class BuiltinTypeKind : uint8_t {
   Int,
+  Char,
 };
 
 struct BuiltinType {
@@ -19,7 +20,17 @@ struct BuiltinType {
   }
 };
 
-using TypeVariant = std::variant<BuiltinType>;
+struct Type;
+
+struct PointerType {
+  Type* pointee{ nullptr };
+
+  auto operator==(PointerType other) const -> bool {
+    return pointee == other.pointee;
+  }
+};
+
+using TypeVariant = std::variant<BuiltinType, PointerType>;
 
 struct Type {
   TypeVariant variant;

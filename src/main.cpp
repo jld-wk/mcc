@@ -63,8 +63,8 @@ auto main() -> int {
 
     std::println("");
 
-    IrInterpreter interpreter;
-    interpreter.interpret_file("source.ir", source_manager);
+    IrInterpreter interpreter{ types };
+    interpreter.interpret_file("source.mir", source_manager);
 
   } catch (const std::exception& e) {
     return 1;

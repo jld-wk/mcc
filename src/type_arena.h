@@ -98,13 +98,16 @@ class TypeArena {
 
   struct TypeVariantHasher {
     auto operator()(TypeVariant variant) const -> size_t {
-      return std::visit(
-          Overload{
-              [=](BuiltinType type) -> size_t {
-                return variant.index() ^ (static_cast<size_t>(type.kind) << 1);
-              },
-          },
-          variant);
+      return std::visit(Overload{
+                            [=](BuiltinType type) -> size_t {
+                              return variant.index() ^ (static_cast<size_t>(type.kind) << 1);
+                            },
+                            [=](PointerType type) -> size_t {
+                              return variant.index() ^
+                                     (reinterpret_cast<size_t>(type.pointee) << 1);
+                            },
+                        },
+                        variant);
     };
   };
 
