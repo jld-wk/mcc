@@ -29,8 +29,8 @@ struct ReturnStmt {
 using StmtVariant = std::variant<BlockStmt, ReturnStmt>;
 
 struct Stmt {
-  StmtVariant variant;
-  SourceRange source;
+  StmtVariant      variant;
+  SourceMultiRange range;
 };
 
 #endif  // JLD_MCC_STMTS_H

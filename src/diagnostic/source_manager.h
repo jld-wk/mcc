@@ -8,16 +8,16 @@
 #include <fstream>
 #include <ios>
 #include <iosfwd>
-#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "source.h"
+using FileId = size_t;
 
 struct SourceFile {
-  std::string     path;
-  std::span<char> source;
+  std::string      path;
+  std::string_view source;
 };
 
 class SourceManager {
@@ -53,12 +53,12 @@ class SourceManager {
     FileId id{ m_nextId_++ };
     m_sourceFiles_[id] = SourceFile{
       .path = std::move(path),
-      .source = std::span<char>{ data, size },
+      .source = std::string_view{ data, size },
     };
     return id;
   }
 
-  [[nodiscard]] auto query(FileId id) const -> const SourceFile& {
+  [[nodiscard]] auto find(FileId id) const -> const SourceFile& {
     if (id >= m_nextId_) {
       // ERROR
     }

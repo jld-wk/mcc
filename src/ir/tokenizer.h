@@ -9,15 +9,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <format>
 #include <string_view>
 #include <vector>
 
+#include "diagnostic/core.h"
 #include "diagnostic/source.h"
+#include "diagnostic/source_manager.h"
 
 enum class IrTokenKind : uint8_t {
   Char,
   Slot,
-  Integer,
+  Number,
   Identifier,
 
   KywLoad,
@@ -51,11 +54,11 @@ enum class IrTokenKind : uint8_t {
   KywEnd,
 
   KywExit,
-  KywDump,
+  KywPrint,
 
-  KywChar,
+  KywU8,
   KywVoid,
-  KywInt,
+  KywU32,
 
   Dot,
   Star,
@@ -72,9 +75,9 @@ enum class IrTokenKind : uint8_t {
 };
 
 struct IrToken {
-  IrTokenKind      kind;
-  SourceRange      source;
   std::string_view text;
+  SourceRange      range;
+  IrTokenKind      kind;
 };
 
 class IrTokenizer {
@@ -103,6 +106,46 @@ class IrTokenizer {
       }
 
       if (c == ';') {
+        if (*m_sourceIt_ == ';') {
+          iterate();
+
+          while (*m_sourceIt_ != ';') {
+            if (*m_sourceIt_ == '\n')
+              ++m_line_;
+            if (*m_sourceIt_ == '\0') {
+              push_token(IrTokenKind::EndOfFile);
+              return m_tokens_;
+            }
+            iterate();
+          }
+
+          iterate();
+
+          if (*m_sourceIt_ != ';') {
+            Diagnostics::report(Diagnostic{
+                .severity = DiagnosticSeverity::Error,
+                .range = static_cast<SourceMultiRange>(SourceRange{
+                    .line = m_line_,
+                    .column = m_column_,
+                    .length = 2,
+                }),
+                .message = "Expected ';;' (double semicolon) to close the multi-line comment",
+                .notes = { Diagnostic{
+                    .severity = DiagnosticSeverity::Note,
+                    .range = static_cast<SourceMultiRange>(SourceRange{
+                        .line = m_startLine_,
+                        .column = m_startColumn_,
+                        .length = 2,
+                    }),
+                    .message = "Multi-line comment started here",
+                    .notes = {},
+                } },
+            });
+          }
+
+          continue;
+        }
+
         while (*m_sourceIt_ != '\n') iterate();
         continue;
       }
@@ -125,7 +168,7 @@ class IrTokenizer {
 
       if (std::isdigit(c)) {
         while (is_identifier(*m_sourceIt_)) iterate();
-        push_token(IrTokenKind::Integer);
+        push_token(IrTokenKind::Number);
         continue;
       }
 
@@ -197,8 +240,16 @@ class IrTokenizer {
         }
 
         if (*m_sourceIt_ != '\'') {
-          assert(false);
-          // TODO(jld-wk): print diagnostic
+          Diagnostics::report(Diagnostic{
+              .severity = DiagnosticSeverity::Error,
+              .range = static_cast<SourceMultiRange>(SourceRange{
+                  .line = m_line_,
+                  .column = m_column_,
+                  .length = 1,
+              }),
+              .message = "Expected an ending ' (single quote) to close the char literal",
+              .notes = {},
+          });
         }
 
         iterate();
@@ -212,6 +263,7 @@ class IrTokenizer {
         while (is_identifier(*m_sourceIt_)) iterate();
 
         if (*m_sourceIt_ == ']') {
+          ++m_startColumn_;
           ++m_startIterated_;
           push_token(IrTokenKind::Slot);
           iterate();
@@ -219,25 +271,51 @@ class IrTokenizer {
         }
 
         if (*m_sourceIt_ != ':') {
-          assert(false);
-          // TODO(jld-wk): print diagnostic
+          Diagnostics::report(Diagnostic{
+              .severity = DiagnosticSeverity::Error,
+              .range = static_cast<SourceMultiRange>(SourceRange{
+                  .line = m_line_,
+                  .column = m_column_,
+                  .length = 1,
+              }),
+              .message = "Expected a ':' (colon) to seperate the type from the slot index",
+              .notes = {},
+          });
         }
 
         iterate();
 
         while (is_identifier(*m_sourceIt_)) iterate();
         if (*m_sourceIt_ != ']') {
-          assert(false);
-          // TODO(jld-wk): print diagnostic
+          Diagnostics::report(Diagnostic{
+              .severity = DiagnosticSeverity::Error,
+              .range = static_cast<SourceMultiRange>(SourceRange{
+                  .line = m_line_,
+                  .column = m_column_,
+                  .length = 1,
+              }),
+              .message = "Expected a ']' (closing bracket) to close the slot",
+              .notes = {},
+          });
         }
 
+        ++m_startColumn_;
         ++m_startIterated_;
         push_token(IrTokenKind::Slot);
         iterate();
         continue;
       }
 
-      // TODO(jld-wk): print diagnostic
+      Diagnostics::report(Diagnostic{
+          .severity = DiagnosticSeverity::Error,
+          .range = static_cast<SourceMultiRange>(SourceRange{
+              .line = m_line_,
+              .column = m_column_,
+              .length = 1,
+          }),
+          .message = std::format("Unexpected '{}' -> unable to lex it", c),
+          .notes = {},
+      });
     }
 
     // TODO(jld-wk): compiler panic? -> missing \0 terminator
@@ -261,47 +339,44 @@ class IrTokenizer {
   }
 
   void push_char_token(IrTokenKind kind, std::string_view literal) {
+    uint32_t length = m_column_ - m_startColumn_;
     m_tokens_.push_back(IrToken{
-        .kind = kind,
-        .source =
-            SourceRange{
-                .file = m_file_,
-                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
-                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
-                .beginIt = m_startIterated_,
-                .endIt = m_iterated_,
-            },
         .text = literal,
+        .range =
+            SourceRange{
+                .line = m_startLine_,
+                .column = m_startColumn_,
+                .length = length,
+            },
+        .kind = kind,
     });
   }
 
   void push_token(IrTokenKind kind) {
+    uint32_t length = m_column_ - m_startColumn_;
     m_tokens_.push_back(IrToken{
-        .kind = kind,
-        .source =
-            SourceRange{
-                .file = m_file_,
-                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
-                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
-                .beginIt = m_startIterated_,
-                .endIt = m_iterated_,
-            },
         .text = str_view(),
+        .range =
+            SourceRange{
+                .line = m_startLine_,
+                .column = m_startColumn_,
+                .length = length,
+            },
+        .kind = kind,
     });
   }
 
   void push_token_str_view(IrTokenKind kind, std::string_view view) {
+    uint32_t length = m_column_ - m_startColumn_;
     m_tokens_.push_back(IrToken{
-        .kind = kind,
-        .source =
-            SourceRange{
-                .file = m_file_,
-                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
-                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
-                .beginIt = m_startIterated_,
-                .endIt = m_iterated_,
-            },
         .text = view,
+        .range =
+            SourceRange{
+                .line = m_startLine_,
+                .column = m_startColumn_,
+                .length = length,
+            },
+        .kind = kind,
     });
   }
 
@@ -355,8 +430,8 @@ class IrTokenizer {
 
     if (view == "exit")
       return IrTokenKind::KywExit;
-    if (view == "dump")
-      return IrTokenKind::KywDump;
+    if (view == "print")
+      return IrTokenKind::KywPrint;
 
     if (view == "end")
       return IrTokenKind::KywEnd;
@@ -365,10 +440,10 @@ class IrTokenizer {
     if (view == "arg")
       return IrTokenKind::KywArg;
 
-    if (view == "int")
-      return IrTokenKind::KywInt;
-    if (view == "char")
-      return IrTokenKind::KywChar;
+    if (view == "u8")
+      return IrTokenKind::KywU8;
+    if (view == "u32")
+      return IrTokenKind::KywU32;
     if (view == "void")
       return IrTokenKind::KywVoid;
 
@@ -397,7 +472,7 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
   switch (kind) {
     case IrTokenKind::Char:
       return "<char>";
-    case IrTokenKind::Integer:
+    case IrTokenKind::Number:
       return "<number>";
     case IrTokenKind::Slot:
       return "<slot>";
@@ -436,20 +511,20 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
     case IrTokenKind::KywCall:
       return "<call>";
     case IrTokenKind::KywJmpIf:
-      return "<jmp_if>";
+      return "<jmp-if>";
     case IrTokenKind::KywCallIf:
-      return "<call_if>";
+      return "<call-if>";
 
     case IrTokenKind::KywAlloc:
       return "<alloc>";
     case IrTokenKind::KywFree:
       return "<free>";
     case IrTokenKind::KywLoadAddr:
-      return "<load_addr>";
+      return "<load-addr>";
     case IrTokenKind::KywStoreAt:
-      return "<store_ptr>";
+      return "<store-at>";
     case IrTokenKind::KywStoreAddr:
-      return "<store_addr>";
+      return "<store-addr>";
 
     case IrTokenKind::KywArg:
       return "<arg>";
@@ -460,13 +535,13 @@ auto format_ir_token_kind(IrTokenKind kind) -> const char* {
 
     case IrTokenKind::KywExit:
       return "<exit>";
-    case IrTokenKind::KywDump:
-      return "<dump>";
+    case IrTokenKind::KywPrint:
+      return "<print>";
 
-    case IrTokenKind::KywChar:
-      return "<char>";
-    case IrTokenKind::KywInt:
-      return "<int>";
+    case IrTokenKind::KywU8:
+      return "<u8>";
+    case IrTokenKind::KywU32:
+      return "<u32>";
     case IrTokenKind::KywVoid:
       return "<void>";
 

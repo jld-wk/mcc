@@ -30,7 +30,7 @@ int main() {
 
 For the current project, main should turn into a function symbol, which then replaces the function
 declaration (so might be an syntaxer step already). Then the entry scope of main is entered and
-therfore the current function symbol is main. Return should just query the latest entered function
+therfore the current function symbol is main. Return should just find the latest entered function
 and compare the function and expression type.
 
 */
@@ -48,7 +48,7 @@ class SemanticPass {
  private:
   auto compare_types(Type* type_a, Type* type_b) -> bool {
     assert(type_a != nullptr && type_b != nullptr);
-    return type_a->variant == type_b->variant;
+    return type_a->data == type_b->data;
   }
 
   void analyze_expr(Expr* p_expr) {
@@ -57,7 +57,7 @@ class SemanticPass {
                    std::println("Analyzing Integer Literal Expression -> {}", expr.literal);
                  }
 
-                 p_expr->type = m_types_.query(BuiltinType{ .kind = BuiltinTypeKind::Int });
+                 p_expr->type = m_types_.find(BuiltinType{ .kind = BuiltinTypeKind::U32 });
                } },
                p_expr->variant);
   }
@@ -83,7 +83,7 @@ class SemanticPass {
                            analyze_expr(stmt.expr);
                            assert(compare_types(
                                stmt.expr->type,
-                               m_types_.query(BuiltinType{ .kind = BuiltinTypeKind::Int })));
+                               m_types_.find(BuiltinType{ .kind = BuiltinTypeKind::U32 })));
                          } },
                p_stmt->variant);
   }

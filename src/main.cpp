@@ -11,7 +11,6 @@
 
 #include "decls.h"
 #include "diagnostic/core.h"
-#include "diagnostic/source.h"
 #include "diagnostic/source_manager.h"
 #include "ir/interpreter.h"
 #include "passes/semantic.h"
@@ -28,9 +27,8 @@ auto main() -> int {
     // TODO(jld-wk): NO!
     Diagnostics::init(&source_manager);
 
-    FileId           file = source_manager.open("source.c");
-    std::span<char>  source_buf = source_manager.query(file).source;
-    std::string_view source{ source_buf.data(), source_buf.size() };
+    FileId           file{ source_manager.open("source.c") };
+    std::string_view source{ source_manager.find(file).source };
 
     Tokenizer                 tokenizer;
     const std::vector<Token>& tokens = tokenizer.tokenize(file, source);
@@ -43,7 +41,7 @@ auto main() -> int {
 
     Syntaxer syntaxer{ tokens, types };
     // TODO(jld-wk): not actually an AST yet, have to implement a FileDecl
-    std::vector<Decl*> ast = syntaxer.build();
+    std::vector<Decl*> ast{ syntaxer.build() };
 
     // need like an ast pretty printer
 

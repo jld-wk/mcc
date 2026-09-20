@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <unordered_map>
@@ -18,53 +19,65 @@
 class TypeArena {
  public:
   TypeArena() {
-    m_blocks_ = allocate<Type*>(c_blocksCount);
-    allocate_new_slots();
+    m_blocks_ = alloc<Type*>(c_blocksCount);
+    alloc_new_slots();
   }
 
   ~TypeArena() {
-    for (size_t b = 0; b < m_blockIdx_; ++b) deallocate(m_blocks_[b]);
-    deallocate(m_blocks_);
+    for (size_t b = 0; b < m_blockIdx_; ++b) dealloc(m_blocks_[b]);
+    dealloc(m_blocks_);
     assert(m_freed_ == m_allocated_);
   }
 
-  auto query(TypeVariant variant) const -> Type* {
-    const auto it = m_typeIds_.find(variant);
+  auto find(TypeData data) const -> Type* {
+    const auto it = m_typeIds_.find(data);
     if (it == m_typeIds_.end())
       return nullptr;
     TypeId type_id = it->second;
     return &m_blocks_[type_id.blockIdx][type_id.slotIdx];
   }
 
-  auto emplace(TypeVariant variant) -> Type* {
+  auto emplace(TypeData data) -> Type* {
     if (m_slotIdx_ >= c_slotsCount)
-      allocate_new_slots();
-    Type* type = query(variant);
+      alloc_new_slots();
+    Type* type = find(data);
 
     if (type == nullptr) {
       TypeId type_id{ .slotIdx = m_slotIdx_, .blockIdx = m_blockIdx_ - 1 };
       Type*  ptr{ &m_slots_[m_slotIdx_++] };
-      std::construct_at(ptr, variant);
-      m_typeIds_[variant] = type_id;
+      std::construct_at(ptr, data);
+      m_typeIds_[data] = type_id;
       return ptr;
     }
 
     return type;
   }
 
+  auto emplace_int() -> Type* {
+    return emplace(BuiltinType{ .kind = BuiltinTypeKind::U32 });
+  }
+
+  auto emplace_char() -> Type* {
+    return emplace(BuiltinType{ .kind = BuiltinTypeKind::U8 });
+  }
+
+  auto emplace_ptr(Type* pointee) -> Type* {
+    return emplace(PointerType{ .pointee = pointee });
+  }
+
  private:
-  void allocate_new_slots() {
+  void alloc_new_slots() {
     // TODO(jld-wk): Fix that... I mean it's a total of 10000 slots but it might not be enough
     assert(m_blockIdx_ < c_blocksCount);
 
     m_slotIdx_ = 0;
-    m_slots_ = allocate<Type>(c_slotsCount);
+    m_slots_ = alloc<Type>(c_slotsCount);
     m_blocks_[m_blockIdx_++] = m_slots_;
   }
 
   // TODO(jld-wk): Some debug checks for testing, strip out at release builds
   template <typename Type>
-  auto allocate(size_t count) -> Type* {
+  auto alloc(size_t count) -> Type* {
     const size_t size{ count * sizeof(Type) };
     m_allocated_ += size;
     char* ptr{ static_cast<char*>(malloc(size + sizeof(size_t))) };
@@ -73,7 +86,7 @@ class TypeArena {
   }
 
   template <typename Type>
-  void deallocate(Type* ptr) {
+  void dealloc(Type* ptr) {
     char*      c_ptr{ reinterpret_cast<char*>(ptr) - sizeof(size_t) };
     const auto size{ *reinterpret_cast<size_t*>(c_ptr) };
     m_freed_ += size;
@@ -96,22 +109,20 @@ class TypeArena {
     size_t blockIdx{ 0 };
   };
 
-  struct TypeVariantHasher {
-    auto operator()(TypeVariant variant) const -> size_t {
-      return std::visit(Overload{
-                            [=](BuiltinType type) -> size_t {
-                              return variant.index() ^ (static_cast<size_t>(type.kind) << 1);
-                            },
-                            [=](PointerType type) -> size_t {
-                              return variant.index() ^
-                                     (reinterpret_cast<size_t>(type.pointee) << 1);
-                            },
-                        },
-                        variant);
+  struct TypeDataHasher {
+    auto operator()(TypeData variant) const -> size_t {
+      return std::visit(
+          Overload{
+              [](BuiltinType type) -> size_t { return 1 ^ (static_cast<size_t>(type.kind) << 1); },
+              [](PointerType type) -> size_t {
+                return 2 ^ (reinterpret_cast<std::uintptr_t>(type.pointee) << 1);
+              },
+          },
+          variant);
     };
   };
 
-  std::unordered_map<TypeVariant, TypeId, TypeVariantHasher> m_typeIds_;
+  std::unordered_map<TypeData, TypeId, TypeDataHasher> m_typeIds_;
 };
 
 #endif  // JLD_MCC_TYPE_ARENA_H

@@ -4,11 +4,12 @@
 #ifndef JLD_MCC_DIAGNOSTIC_CORE_H
 #define JLD_MCC_DIAGNOSTIC_CORE_H
 
-#include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <format>
 #include <print>
-#include <span>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -26,7 +27,7 @@ enum class DiagnosticSeverity : uint8_t {
 
 struct Diagnostic {
   DiagnosticSeverity severity;
-  SourceRange        range;
+  SourceMultiRange   range;
   std::string        message;
 
   std::vector<Diagnostic> notes;
@@ -53,14 +54,19 @@ class Diagnostics {
   }
 
   static void print() {
-    for (const Diagnostic& diagnostic : s_diagnostics_) {
-      print_diagnostic(diagnostic);
-      std::println(stderr, "");
-    }
+    for (const Diagnostic& diagnostic : s_diagnostics_) print_diagnostic(diagnostic);
   }
 
   static void clear() {
     s_diagnostics_.clear();
+  }
+
+  template <typename... Args>
+  static constexpr auto format(std::format_string<Args...> fmt, Args&&... args) -> std::string {
+    std::string formatted = std::format<Args...>(fmt, std::forward<Args>(args)...);
+    formatted = std::regex_replace(formatted, std::regex("/B"), "\033[1m");
+    formatted = std::regex_replace(formatted, std::regex("/R"), "\033[m");
+    return formatted;
   }
 
  private:
@@ -79,67 +85,83 @@ class Diagnostics {
   }
 
   static void print_diagnostic(const Diagnostic& diagnostic) {
-    std::println(stderr, "{}: {}", format_severity(diagnostic.severity), diagnostic.message);
-
     if (s_sourceManager_ == nullptr)
       return;
-    const SourceFile& file{ s_sourceManager_->query(diagnostic.range.file) };
+    // TODO(jld-wk): Fix hardcoded 1
+    const SourceFile& file{ s_sourceManager_->find(2) };
+    print_diagnostic(diagnostic, file);
 
-    std::println(stderr, " --> {}:{}:{}", file.path, diagnostic.range.begin.line,
-                 diagnostic.range.begin.column);
-    print_source(diagnostic, file);
-
-    for (const Diagnostic& note : diagnostic.notes) {
-      std::println(stderr);
-      print_note(note);
-    }
+    for (const Diagnostic& note : diagnostic.notes) print_diagnostic(note);
   }
 
-  static void print_note(const Diagnostic& diagnostic) {
-    std::println(stderr, "note: {}", diagnostic.message);
-
-    if (s_sourceManager_ == nullptr)
-      return;
-    const SourceFile& file{ s_sourceManager_->query(diagnostic.range.file) };
-
-    std::println(stderr, " --> {}:{}:{}", file.path, diagnostic.range.begin.line,
-                 diagnostic.range.begin.column);
-    print_source(diagnostic, file);
-  }
-
-  static void print_source(const Diagnostic& diagnostic, const SourceFile& file) {
-    const std::span<char> source{ file.source };
+  static void print_diagnostic(const Diagnostic& diagnostic, const SourceFile& file) {
+    const std::string_view source{ file.source };
     if (source.empty())
       return;
 
-    const std::string_view diagnostic_source{ source.data() + diagnostic.range.beginIt,
-                                              diagnostic.range.endIt - diagnostic.range.beginIt };
-
-    const uint32_t line_number{ diagnostic.range.begin.line };
-    const size_t   line_digits{ std::to_string(line_number).size() };
-
-    std::println(stderr, " {} |", std::string(line_digits, ' '));
-    std::println(stderr, " {} | {}", line_number, diagnostic_source);
-    std::print(stderr, " {} | ", std::string(line_digits, ' '));
-
-    const uint32_t column{ diagnostic.range.begin.column > 0 ? diagnostic.range.begin.column - 1
-                                                             : 0 };
-    const uint32_t clamped_column{ std::min(column,
-                                            static_cast<uint32_t>(diagnostic_source.size())) };
-
-    std::print(stderr, "{}^", std::string(clamped_column, ' '));
-
-    if (diagnostic.range.end.line == diagnostic.range.begin.line &&
-        diagnostic.range.end.column > diagnostic.range.begin.column) {
-      const size_t length{ diagnostic.range.end.column - diagnostic.range.begin.column };
-      if (length > 1) {
-        const size_t available{ diagnostic_source.size() - clamped_column };
-        const size_t highlight{ std::min(length - 1, available) };
-        std::println(stderr, "{}", std::string(highlight, '~'));
-      }
+    std::println(stderr, "\033[1m\033[41;255m{}\033[m: {}", format_severity(diagnostic.severity),
+                 diagnostic.message);
+    if (diagnostic.range.begin.line == 0) {
+      std::println();
+      return;
     }
 
-    std::println(stderr, " {} |", std::string(line_digits, ' '));
+    uint32_t         line{ 0 };
+    size_t           start{ 0 };
+    std::string_view tgt_source_line;
+
+    while (start < source.size()) {
+      size_t end{ source.find('\n', start) };
+      if (end == std::string_view::npos)
+        end = source.size() - 1;
+
+      ++line;
+      if (line == diagnostic.range.begin.line) {
+        tgt_source_line = source.substr(start, end - start);
+        break;
+      }
+      start = end + 1;
+    }
+
+    if (tgt_source_line.empty())
+      return;
+
+    const std::string_view bold_code{ "\033[1m\033[31m" };
+    const std::string_view reset_code{ "\033[m" };
+
+    const size_t source_line_size =
+        tgt_source_line.size() + bold_code.size() + reset_code.size() + 1;
+    char* source_line = new char[source_line_size];
+    source_line[source_line_size - 1] = '\0';
+
+    const uint32_t tgt_column{ diagnostic.range.begin.column - 1 };
+    const uint32_t tgt_length{ diagnostic.range.end.column - diagnostic.range.begin.column };
+
+    size_t offset = 0;
+    memcpy(source_line, tgt_source_line.data(), tgt_column);
+    offset += tgt_column;
+    memcpy(source_line + offset, bold_code.data(), bold_code.size());
+    offset += bold_code.size();
+    memcpy(source_line + offset, tgt_source_line.data() + tgt_column, tgt_length);
+    offset += tgt_length;
+    memcpy(source_line + offset, reset_code.data(), reset_code.size());
+    offset += reset_code.size();
+    memcpy(source_line + offset, tgt_source_line.data() + tgt_column + tgt_length,
+           tgt_source_line.size() - tgt_column - tgt_length);
+
+    std::string indicator(tgt_column + tgt_length, ' ');
+    indicator[tgt_column] = '^';
+    for (uint32_t i = 1; i < tgt_length; ++i) indicator[i + tgt_column] = '~';
+
+    std::string line_number{ std::to_string(diagnostic.range.begin.line) };
+    std::string line_spaces(5 - line_number.size(), ' ');
+
+    std::println(stderr, "\033[1m\033[255m ----> {}:{}:{}\033[m", file.path,
+                 diagnostic.range.begin.line, tgt_column + 1);
+    std::println(stderr, "\033[1m\033[255m {}{} |\033[m {}", line_spaces, line_number, source_line);
+    std::println(stderr, "       \033[1m|\033[1m\033[31m {}\033[m", indicator);
+
+    delete[] source_line;
   }
 
  private:

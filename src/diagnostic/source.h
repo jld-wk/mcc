@@ -5,33 +5,36 @@
 #define JLD_MCC_SOURCE_H
 
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
 
-using FileId = size_t;
-
 struct SourceLocation {
-  uint32_t line;
-  uint32_t column;
+  uint32_t line{ 0 };
+  uint32_t column{ 0 };
+};
+
+struct SourceMultiRange {
+  SourceLocation begin;
+  SourceLocation end;
 };
 
 struct SourceRange {
-  FileId file;
+  uint32_t line{ 0 };
+  uint32_t column{ 0 };
+  uint32_t length{ 0 };
 
-  SourceLocation begin;
-  SourceLocation end;
-
-  size_t beginIt;
-  size_t endIt;
+  explicit operator SourceMultiRange() const {
+    return SourceMultiRange{
+      .begin = SourceLocation{ .line = line, .column = column },
+      .end = SourceLocation{ .line = line, .column = column + length },
+    };
+  }
 };
 
-auto source_range_from(const SourceRange& start, const SourceRange& end) -> SourceRange {
-  assert(start.file == end.file);
-  return SourceRange{ .file = start.file,
-                      .begin = start.begin,
-                      .end = end.end,
-                      .beginIt = start.beginIt,
-                      .endIt = end.endIt };
+auto source_multi_range_from(const SourceRange& start, const SourceRange& end) -> SourceMultiRange {
+  return SourceMultiRange{
+    .begin = SourceLocation{ .line = start.line, .column = start.column },
+    .end = SourceLocation{ .line = end.line, .column = end.column + end.length },
+  };
 }
 
 #endif  // JLD_MCC_SOURCE_H

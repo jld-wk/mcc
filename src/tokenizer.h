@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "diagnostic/source.h"
+#include "diagnostic/source_manager.h"
 
 enum class TokenKind : uint8_t {
   KywDo,
@@ -134,9 +135,9 @@ enum class TokenKind : uint8_t {
 };
 
 struct Token {
-  TokenKind        kind;
-  SourceRange      source;
   std::string_view text;
+  SourceRange      range;
+  TokenKind        kind;
 };
 
 class Tokenizer {
@@ -247,32 +248,30 @@ class Tokenizer {
   }
 
   void push_token(TokenKind kind) {
+    uint32_t length = m_column_ - m_startColumn_;
     m_tokens_.push_back(Token{
-        .kind = kind,
-        .source =
-            SourceRange{
-                .file = m_file_,
-                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
-                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
-                .beginIt = m_startIterated_,
-                .endIt = m_iterated_,
-            },
         .text = str_view(),
+        .range =
+            SourceRange{
+                .line = m_startLine_,
+                .column = m_startColumn_,
+                .length = length,
+            },
+        .kind = kind,
     });
   }
 
   void push_token_str_view(TokenKind kind, std::string_view view) {
+    uint32_t length = m_column_ - m_startColumn_;
     m_tokens_.push_back(Token{
-        .kind = kind,
-        .source =
-            SourceRange{
-                .file = m_file_,
-                .begin = SourceLocation{ .line = m_startLine_, .column = m_startColumn_ },
-                .end = SourceLocation{ .line = m_line_, .column = m_column_ },
-                .beginIt = m_startIterated_,
-                .endIt = m_iterated_,
-            },
         .text = view,
+        .range =
+            SourceRange{
+                .line = m_startLine_,
+                .column = m_startColumn_,
+                .length = length,
+            },
+        .kind = kind,
     });
   }
 

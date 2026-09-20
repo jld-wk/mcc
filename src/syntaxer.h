@@ -44,7 +44,7 @@ class Syntaxer {
       std::string_view view = start.text;
       int              literal{ 0 };
       std::from_chars(view.data(), view.data() + view.length(), literal);
-      return m_exprs_.emplace(IntLiteralExpr{ .literal = literal }, start.source);
+      return m_exprs_.emplace(IntLiteralExpr{ .literal = literal }, start.range);
     }
     // TODO(jld-wk): print diagnostic
     return nullptr;
@@ -69,7 +69,7 @@ class Syntaxer {
     const Token& end = current();
     expect(TokenKind::CloseBrace);
     return m_stmts_.emplace(BlockStmt{ .items = std::move(items) },
-                            source_range_from(start.source, end.source));
+                            source_multi_range_from(start.range, end.range));
   }
 
   [[nodiscard]] auto build_stmt(bool w_block = true) -> Stmt* {
@@ -83,7 +83,7 @@ class Syntaxer {
           ReturnStmt{
               .expr = expr,
           },
-          start.source);
+          source_multi_range_from(start.range, start.range));
     }
     // TODO(jld-wk): build stmts
     return nullptr;
@@ -92,7 +92,7 @@ class Syntaxer {
   [[nodiscard]] auto build_type() -> Type* {
     [[maybe_unused]] const Token& cur = current();
     if (match(TokenKind::KywInt)) {
-      return m_types_.emplace(BuiltinType{ .kind = BuiltinTypeKind::Int });
+      return m_types_.emplace(BuiltinType{ .kind = BuiltinTypeKind::U32 });
     }
 
     // TODO(jld-wk): print diagnostic
@@ -128,7 +128,7 @@ class Syntaxer {
               .stmt = stmt,
               .identifer = identifier.text,
           },
-          identifier.source);
+          identifier.range);
     }
 
     return nullptr;
