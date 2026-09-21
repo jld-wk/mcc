@@ -144,7 +144,7 @@ class IrSyntaxer {
       *param = InstArg{
         .data =
             IrValue{
-                .data = IrIntegerValue{ number, IrIntegerType::U32 },
+                .data = IrInterpIntVal{ number, IrIntegerType::U32 },
                 .type = m_types_.emplace(BuiltinType{
                     .kind = BuiltinTypeKind::U32,
                 }),
@@ -160,7 +160,7 @@ class IrSyntaxer {
         .data =
             IrValue{
                 .data =
-                    IrIntegerValue{
+                    IrInterpIntVal{
                         static_cast<unsigned char>(start.text[0]),
                         IrIntegerType::U8,
                     },

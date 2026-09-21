@@ -12,7 +12,7 @@
 #include "decls.h"
 #include "diagnostic/core.h"
 #include "diagnostic/source_manager.h"
-#include "ir/interpreter.h"
+#include "ir/interpreter/core.h"
 #include "passes/semantic.h"
 #include "syntaxer.h"
 #include "tokenizer.h"

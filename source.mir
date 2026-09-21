@@ -2,16 +2,23 @@
 ; SPDX-License-Identifier: Apache-2.0
 
 entry (void):
-x: u32
-store 0 -> [x]
-jmp loop
 
-.loop:
-  jmp_if [x] eq 100 -> done
-  add [x] 1 -> [x]
-  jmp loop
+str: u8*
+alloc 1 -> [str]
+store_at '?' -> [str] 0
 
-.done:
-  print [x]
+jmp cond
+
+.cond:
+  c: u8
+  load_addr [str] -> [c]
+  print [c]
+  jmp return
+
+.return:
+  c: u8
+  load_addr [str] -> [c]
+
   exit 0
+
 end

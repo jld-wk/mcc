@@ -13,8 +13,8 @@
 #include <variant>
 
 #include "ir/insts.h"
-#include "ir/values.h"
 #include "types.h"
+#include "values.h"
 
 class IrOverloader {
  public:

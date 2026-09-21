@@ -99,7 +99,14 @@ class Diagnostics {
     if (source.empty())
       return;
 
-    std::println(stderr, "\033[1m\033[41;255m{}\033[m: {}", format_severity(diagnostic.severity),
+    const char*      bg_code{ diagnostic.severity == DiagnosticSeverity::Error ||
+                                      diagnostic.severity == DiagnosticSeverity::Fatal
+                                  ? "\033[1m\033[41;255m"
+                                  : "\033[1m\033[94m" };
+    std::string_view fg_code{ diagnostic.severity == DiagnosticSeverity::Error ? "\033[1m\033[31m"
+                                                                               : bg_code };
+
+    std::println(stderr, "{}{}\033[m: {}", bg_code, format_severity(diagnostic.severity),
                  diagnostic.message);
     if (diagnostic.range.begin.line == 0) {
       std::println();
@@ -126,12 +133,11 @@ class Diagnostics {
     if (tgt_source_line.empty())
       return;
 
-    const std::string_view bold_code{ "\033[1m\033[31m" };
     const std::string_view reset_code{ "\033[m" };
 
-    const size_t source_line_size =
-        tgt_source_line.size() + bold_code.size() + reset_code.size() + 1;
-    char* source_line = new char[source_line_size];
+    const size_t source_line_size{ tgt_source_line.size() + fg_code.size() + reset_code.size() +
+                                   1 };
+    char*        source_line{ new char[source_line_size] };
     source_line[source_line_size - 1] = '\0';
 
     const uint32_t tgt_column{ diagnostic.range.begin.column - 1 };
@@ -140,8 +146,8 @@ class Diagnostics {
     size_t offset = 0;
     memcpy(source_line, tgt_source_line.data(), tgt_column);
     offset += tgt_column;
-    memcpy(source_line + offset, bold_code.data(), bold_code.size());
-    offset += bold_code.size();
+    memcpy(source_line + offset, fg_code.data(), fg_code.size());
+    offset += fg_code.size();
     memcpy(source_line + offset, tgt_source_line.data() + tgt_column, tgt_length);
     offset += tgt_length;
     memcpy(source_line + offset, reset_code.data(), reset_code.size());
@@ -159,7 +165,7 @@ class Diagnostics {
     std::println(stderr, "\033[1m\033[255m ----> {}:{}:{}\033[m", file.path,
                  diagnostic.range.begin.line, tgt_column + 1);
     std::println(stderr, "\033[1m\033[255m {}{} |\033[m {}", line_spaces, line_number, source_line);
-    std::println(stderr, "       \033[1m|\033[1m\033[31m {}\033[m", indicator);
+    std::println(stderr, "       \033[1m|{} {}\033[m", fg_code, indicator);
 
     delete[] source_line;
   }

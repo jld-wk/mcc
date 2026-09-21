@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "diagnostic/source.h"
-#include "ir/values.h"
+#include "ir/interpreter/values.h"
 #include "types.h"
 
 enum class IrSlotType : uint8_t {

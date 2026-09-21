@@ -6,10 +6,14 @@
 
 #include <cassert>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <variant>
 
+#include "diagnostic/source.h"
 #include "types.h"
+
+enum class InterpreterResult : uint8_t { Success, Error, ExitCalled, ExitFunction, ExitLabel };
 
 enum class IrIntegerType : uint8_t { U1, U8, U16, U32, U64 };
 
@@ -134,8 +138,33 @@ struct IrIntegerValue {
   }
 };
 
+struct IrHeapAllocMetadata {
+  std::uintptr_t base{ 0 };
+  size_t         size{ 0 };
+  SourceRange    range;
+  uint32_t       refCount{ 0 };
+};
+
+struct IrStackAllocMetadata {
+  SourceRange range;
+};
+
+enum class IrPointerOrigin : uint8_t {
+  Heap,
+  Stack,
+};
+
+struct IrValue;
+
 struct IrPointerValue {
-  std::uintptr_t addr;
+  union {
+    IrHeapAllocMetadata* heap;
+    const IrValue*       stack;
+  } alloc;
+  size_t          offset;
+  uint32_t        size;
+  IrPointerOrigin origin;
+  bool            refCounted;
 };
 
 struct IrUndeclaredValue {};
